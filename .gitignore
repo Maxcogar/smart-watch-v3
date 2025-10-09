@@ -1,0 +1,59 @@
+# Arduino/ESP32 build files
+*.bin
+*.elf
+*.hex
+*.map
+*.lst
+build/
+*.o
+*.a
+
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Arduino IDE
+.build/
+*.autosave
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Python (if using build scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Secrets and credentials
+secrets.h
+credentials.h
+.env
+
+# Libraries (if managed externally)
+# Uncomment if libraries are managed via package manager
+# lib/
+
+# Documentation build artifacts
+docs/_build/
+
+# Package manager
+package-lock.json
+yarn.lock
