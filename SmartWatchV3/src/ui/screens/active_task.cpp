@@ -15,6 +15,8 @@
 #include "../widgets/status_bar.h"
 #include "../../services/task_service.h"
 #include "../../services/focus_service.h"
+#include "../../services/notification_service.h"
+#include "../../services/power_service.h"
 #include "../../hardware_config.h"
 
 static lv_obj_t *_titleLabel = NULL;
@@ -24,8 +26,10 @@ static lv_obj_t *_startBtn = NULL;
 static lv_obj_t *_stopBtn = NULL;
 static lv_obj_t *_completeBtn = NULL;
 static lv_timer_t *_updateTimer = NULL;
+static bool _celebrationShown = false;
 
 static void _updateUI(void);
+static void _showCompletionCelebration(void);
 
 static void _formatTime(uint32_t seconds, char *buf, size_t len) {
     uint32_t m = seconds / 60;
@@ -34,7 +38,19 @@ static void _formatTime(uint32_t seconds, char *buf, size_t len) {
 }
 
 static void _onTimerTick(lv_timer_t *t) {
+    FocusState prevState = FocusService::getState();
     FocusService::update();
+    FocusState newState = FocusService::getState();
+
+    // Detect completion transition
+    if (prevState == FOCUS_ACTIVE && newState == FOCUS_COMPLETE && !_celebrationShown) {
+        _celebrationShown = true;
+        // End focus mode
+        PowerService::setFocusMode(false);
+        NotificationService::setFocusShieldActive(false);
+        _showCompletionCelebration();
+    }
+
     _updateUI();
 }
 
@@ -44,8 +60,10 @@ static void _onStartPause(lv_event_t *e) {
         const Task *task = TaskService::getActiveTask();
         uint16_t dur = task ? task->durationMin : 25;
         FocusService::startTimer(dur);
-        // Dim backlight to 40% during focus
-        setDisplayBrightness(102);  // 40% of 255
+        _celebrationShown = false;
+        // Activate focus mode
+        PowerService::setFocusMode(true);
+        NotificationService::setFocusShieldActive(true);
     } else if (state == FOCUS_ACTIVE) {
         FocusService::pauseTimer();
     } else if (state == FOCUS_PAUSED) {
@@ -56,8 +74,8 @@ static void _onStartPause(lv_event_t *e) {
 
 static void _onStop(lv_event_t *e) {
     FocusService::stopTimer();
-    // Restore brightness
-    setDisplayBrightness(204);  // 80%
+    PowerService::setFocusMode(false);
+    NotificationService::setFocusShieldActive(false);
     _updateUI();
 }
 
@@ -67,7 +85,8 @@ static void _onComplete(lv_event_t *e) {
         TaskService::completeTask(idx);
     }
     FocusService::stopTimer();
-    setDisplayBrightness(204);
+    PowerService::setFocusMode(false);
+    NotificationService::setFocusShieldActive(false);
     ScreenManager::goBack();
 }
 
@@ -240,6 +259,44 @@ void ActiveTask::create(lv_obj_t *screen) {
     Gesture::attachToScreen(screen);
 }
 
+/**
+ * Timer completion celebration.
+ * Full-screen green flash for 3 seconds with "Session Complete!" text.
+ * Vibrates if motor available.
+ */
+static void _showCompletionCelebration(void) {
+    vibrateMotor(200);
+
+    // Green flash overlay on lv_layer_top
+    lv_obj_t *flash = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(flash);
+    lv_obj_set_size(flash, SCREEN_WIDTH, SCREEN_HEIGHT);
+    lv_obj_set_pos(flash, 0, 0);
+    lv_obj_set_style_bg_color(flash, COLOR_ACCENT_GREEN, 0);
+    lv_obj_set_style_bg_opa(flash, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(flash, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *icon = lv_label_create(flash);
+    lv_obj_set_style_text_font(icon, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(icon, lv_color_white(), 0);
+    lv_label_set_text(icon, LV_SYMBOL_OK);
+    lv_obj_align(icon, LV_ALIGN_CENTER, 0, -30);
+
+    lv_obj_t *msg = lv_label_create(flash);
+    lv_obj_set_style_text_font(msg, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(msg, lv_color_white(), 0);
+    lv_label_set_text(msg, "Session Complete!");
+    lv_obj_align(msg, LV_ALIGN_CENTER, 0, 20);
+
+    // Auto-remove after 3 seconds
+    lv_timer_t *removeTimer = lv_timer_create([](lv_timer_t *t) {
+        lv_obj_t *obj = (lv_obj_t *)t->user_data;
+        if (obj) lv_obj_del(obj);
+        lv_timer_del(t);
+    }, 3000, flash);
+    lv_timer_set_repeat_count(removeTimer, 1);
+}
+
 void ActiveTask::destroy(void) {
     if (_updateTimer) {
         lv_timer_del(_updateTimer);
@@ -253,4 +310,5 @@ void ActiveTask::destroy(void) {
     _startBtn = NULL;
     _stopBtn = NULL;
     _completeBtn = NULL;
+    _celebrationShown = false;
 }

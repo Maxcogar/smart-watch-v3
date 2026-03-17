@@ -8,6 +8,7 @@
 
 #include "gesture.h"
 #include "theme.h"
+#include "../services/power_service.h"
 
 static GestureCallback _callback = NULL;
 static bool _tracking = false;
@@ -33,6 +34,8 @@ static void _gestureEvent(lv_event_t *e) {
         _startX = point.x;
         _startY = point.y;
         _startTime = lv_tick_get();
+        // Reset power idle timer on any touch
+        PowerService::resetIdleTimer();
     }
     else if (code == LV_EVENT_RELEASED && _tracking) {
         _tracking = false;

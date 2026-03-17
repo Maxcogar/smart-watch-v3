@@ -63,6 +63,7 @@
 #include "src/services/notification_service.h"
 #include "src/services/connectivity_service.h"
 #include "src/services/time_service.h"
+#include "src/services/power_service.h"
 
 // UI system
 #include "src/ui/theme.h"
@@ -90,6 +91,15 @@ QueueHandle_t notificationQueue = NULL;
 // Forward declarations
 void bleTask(void *parameter);
 void checkMemory();
+
+// BLE sync callbacks (called from BLE characteristic writes)
+void onTaskSyncReceived(const char *json, size_t len) {
+    TaskService::syncFromJSON(json, len);
+}
+
+void onTimeSyncReceived(uint32_t epoch) {
+    TimeService::setTimeFromEpoch(epoch);
+}
 
 void setup() {
     Serial.begin(115200);
@@ -120,6 +130,7 @@ void setup() {
     NotificationService::init();
     ConnectivityService::init();
     TimeService::init();
+    PowerService::init();
 
     // --- Init UI system ---
     lvgl_port_lock(-1);
@@ -157,6 +168,9 @@ void setup() {
 }
 
 void loop() {
+    // Power management (runs every iteration)
+    PowerService::update();
+
     static unsigned long lastUpdate = 0;
     if (millis() - lastUpdate > 5000) {
         lastUpdate = millis();
