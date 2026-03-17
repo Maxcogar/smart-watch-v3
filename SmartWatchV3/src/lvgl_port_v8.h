@@ -3,7 +3,7 @@
  *
  * Matches the proven LVGL init pattern from the manufacturer's working
  * examples (05_lvgl_qmi8658, 09_lvgl_camera) with the addition of
- * FreeRTOS task + recursive mutex for esp-brookesia thread-safety.
+ * FreeRTOS task + recursive mutex for thread-safety.
  */
 
 #ifndef LVGL_PORT_V8_H
@@ -28,7 +28,7 @@ extern "C" {
 // Task and timer configuration
 #define LVGL_PORT_TICK_PERIOD_MS        2
 #define LVGL_PORT_TASK_PRIORITY         4
-#define LVGL_PORT_TASK_STACK_SIZE       (8 * 1024)   // 8 KB — esp-brookesia needs headroom
+#define LVGL_PORT_TASK_STACK_SIZE       (8 * 1024)   // 8 KB
 #define LVGL_PORT_TASK_CORE             1            // Run on Core 1
 
 // Function declarations

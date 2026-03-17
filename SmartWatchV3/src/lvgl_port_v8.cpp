@@ -12,7 +12,7 @@
  *     draw16bitRGBBitmap / draw16bitBeRGBBitmap depending on LV_COLOR_16_SWAP
  *   - Touch read via bsp_cst816, identical to examples
  *
- * Added for esp-brookesia (not in the simple examples):
+ * Additions beyond the simple examples:
  *   - Recursive mutex (from example 09_lvgl_camera pattern)
  *   - Dedicated FreeRTOS task on Core 1
  *   - esp_timer for lv_tick_inc
