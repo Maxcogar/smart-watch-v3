@@ -42,6 +42,10 @@
 #define EXAMPLE_PIN_NUM_TP_SDA 48
 #define EXAMPLE_PIN_NUM_TP_SCL 47
 
+// Backlight PWM — matches manufacturer examples exactly
+#define LEDC_FREQ             5000
+#define LEDC_TIMER_10_BIT     10
+
 #define EXAMPLE_LCD_ROTATION 0
 #define EXAMPLE_LCD_H_RES 240
 #define EXAMPLE_LCD_V_RES 320
@@ -102,9 +106,9 @@ void setup() {
     }
     gfx->fillScreen(BLACK);
 
-    // Init Backlight using ESP-IDF LEDC API (must match hardware_config.h)
-    configureBacklightPWM();
-    setDisplayBrightness(BRIGHTNESS_HIGH);
+    // Init Backlight — identical to manufacturer examples
+    ledcAttach(EXAMPLE_PIN_NUM_LCD_BL, LEDC_FREQ, LEDC_TIMER_10_BIT);
+    ledcWrite(EXAMPLE_PIN_NUM_LCD_BL, (1 << LEDC_TIMER_10_BIT) / 100 * 80);
     
     // Init Touch
     Serial.println("Initialize touch device");

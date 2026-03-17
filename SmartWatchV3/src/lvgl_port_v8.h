@@ -1,7 +1,9 @@
 /**
  * LVGL Porting Layer for ESP32-S3
- * 
- * This file configures LVGL to work with the display and touch hardware
+ *
+ * Matches the proven LVGL init pattern from the manufacturer's working
+ * examples (05_lvgl_qmi8658, 09_lvgl_camera) with the addition of
+ * FreeRTOS task + recursive mutex for esp-brookesia thread-safety.
  */
 
 #ifndef LVGL_PORT_V8_H
@@ -23,20 +25,11 @@
 extern "C" {
 #endif
 
-// Display buffer configuration
-#define LVGL_PORT_DISP_BUFFER_NUM       2
-#define LVGL_PORT_DISP_BUFFER_SIZE      (240 * 40)  // Partial buffer for 240x320 display
-#define LVGL_PORT_RGB_BOUNCE_BUFFER_SIZE (240 * 10)
-#define LVGL_PORT_AVOID_TEAR             0  // Set to 1 if tearing occurs
-
-// Touch configuration
-#define LVGL_PORT_TOUCH_POINTS_NUM      1  // Single touch support
-
 // Task and timer configuration
 #define LVGL_PORT_TICK_PERIOD_MS        2
 #define LVGL_PORT_TASK_PRIORITY         4
-#define LVGL_PORT_TASK_STACK_SIZE       4096
-#define LVGL_PORT_TASK_CORE             1  // Run on Core 1
+#define LVGL_PORT_TASK_STACK_SIZE       (8 * 1024)   // 8 KB — esp-brookesia needs headroom
+#define LVGL_PORT_TASK_CORE             1            // Run on Core 1
 
 // Function declarations
 void lvgl_port_init(void *lcd, void *touch);
