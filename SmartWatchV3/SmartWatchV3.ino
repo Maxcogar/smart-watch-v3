@@ -56,6 +56,11 @@
 #include "src/ble_notifications.h"
 #include "src/hardware_config.h"
 
+// Services
+#include "src/services/storage_service.h"
+#include "src/services/task_service.h"
+#include "src/services/focus_service.h"
+
 // UI system
 #include "src/ui/theme.h"
 #include "src/ui/screen_manager.h"
@@ -63,6 +68,7 @@
 #include "src/ui/widgets/status_bar.h"
 #include "src/ui/screens/watch_face.h"
 #include "src/ui/screens/task_list.h"
+#include "src/ui/screens/active_task.h"
 #include "src/ui/screens/notification_view.h"
 
 // --- Display Objects ---
@@ -102,6 +108,11 @@ void setup() {
     // --- Init LVGL ---
     lvgl_port_init(gfx, nullptr);
 
+    // --- Init Services ---
+    StorageService::init();
+    TaskService::init();
+    FocusService::init();
+
     // --- Init UI system ---
     lvgl_port_lock(-1);
 
@@ -114,6 +125,7 @@ void setup() {
     // Register screens
     ScreenManager::registerScreen(SCREEN_WATCH_FACE, WatchFace::create, WatchFace::destroy, "Watch Face");
     ScreenManager::registerScreen(SCREEN_TASK_LIST, TaskList::create, TaskList::destroy, "Tasks");
+    ScreenManager::registerScreen(SCREEN_ACTIVE_TASK, ActiveTask::create, ActiveTask::destroy, "Active Task");
     ScreenManager::registerScreen(SCREEN_NOTIFICATIONS, NotificationView::create, NotificationView::destroy, "Notifications");
 
     // Start on watch face
