@@ -1,30 +1,26 @@
 /**
- * ESP32-S3 SmartWatch with esp-brookesia UI
- * 
- * Hardware: ESP32-S3-Touch-LCD-2 Development Board
- * Features: 
- * - Modern smartphone-style UI using esp-brookesia
- * - BLE notifications from phone
- * - Touch gesture support
- * - Battery monitoring
- * - IMU sensor integration
- * 
+ * ESP32-S3 ADHD-Friendly SmartWatch
+ *
+ * Hardware: Waveshare ESP32-S3-Touch-LCD-2
+ * Display:  320x240 landscape (ST7789 via SPI)
+ * Touch:    CST816S (I2C)
+ * UI:       LVGL 8.3.11 (direct, no framework)
+ *
  * Required Libraries (install via Arduino Library Manager):
- * - esp-brookesia (v0.4.2+)
- * - ESP32_Display_Panel (v0.2.0+)
- * - ESP32_IO_Expander (v0.1.0+)
  * - lvgl (v8.3.11)
  * - ESP32 BLE Arduino
- * 
+ * - ArduinoJson (v7.x)
+ *
  * Board Settings:
  * - Board: ESP32S3 Dev Module
  * - USB CDC On Boot: Enabled
  * - PSRAM: OPI PSRAM
  * - Partition Scheme: Huge APP (3MB No OTA/1MB SPIFFS)
+ * - CPU Frequency: 240MHz (WiFi)
  * - Upload Speed: 921600
  */
 
-// Include C++ STL headers before any C headers to prevent linkage errors with FreeRTOS
+// Include C++ STL headers before any C headers to prevent linkage errors
 #include <type_traits>
 #include <chrono>
 #include <string>
@@ -32,244 +28,193 @@
 #include <Wire.h>
 #include <Arduino_GFX_Library.h>
 
-#define EXAMPLE_PIN_NUM_LCD_SCLK 39
-#define EXAMPLE_PIN_NUM_LCD_MOSI 38
-#define EXAMPLE_PIN_NUM_LCD_MISO 40
-#define EXAMPLE_PIN_NUM_LCD_DC 42
-#define EXAMPLE_PIN_NUM_LCD_RST -1
-#define EXAMPLE_PIN_NUM_LCD_CS 45
-#define EXAMPLE_PIN_NUM_LCD_BL 1
-#define EXAMPLE_PIN_NUM_TP_SDA 48
-#define EXAMPLE_PIN_NUM_TP_SCL 47
+// --- Pin Definitions (match manufacturer examples) ---
+#define PIN_LCD_SCLK  39
+#define PIN_LCD_MOSI  38
+#define PIN_LCD_MISO  40
+#define PIN_LCD_DC    42
+#define PIN_LCD_RST   -1
+#define PIN_LCD_CS    45
+#define PIN_LCD_BL    1
+#define PIN_TP_SDA    48
+#define PIN_TP_SCL    47
 
-#define LEDC_FREQ             5000
+// --- Display Configuration: Landscape 320x240 ---
+#define LCD_ROTATION  1
+#define LCD_H_RES     320
+#define LCD_V_RES     240
 
-
-#define EXAMPLE_LCD_ROTATION 0
-#define EXAMPLE_LCD_H_RES 240
-#define EXAMPLE_LCD_V_RES 320
+// --- Backlight PWM ---
+#define BL_FREQ       5000
+#define BL_RESOLUTION 10
 
 #define LV_CONF_INCLUDE_SIMPLE
 
 #include <Arduino.h>
-#include <esp_brookesia.hpp>
 #include <lvgl.h>
 #include "src/lvgl_port_v8.h"
 #include "src/ble_notifications.h"
-#include "src/watch_apps.h"
 #include "src/hardware_config.h"
 
-// Global GFX objects
+// Services
+#include "src/services/storage_service.h"
+#include "src/services/task_service.h"
+#include "src/services/focus_service.h"
+#include "src/services/notification_service.h"
+#include "src/services/connectivity_service.h"
+#include "src/services/time_service.h"
+#include "src/services/power_service.h"
+
+// UI system
+#include "src/ui/theme.h"
+#include "src/ui/screen_manager.h"
+#include "src/ui/gesture.h"
+#include "src/ui/widgets/status_bar.h"
+#include "src/ui/screens/watch_face.h"
+#include "src/ui/screens/task_list.h"
+#include "src/ui/screens/active_task.h"
+#include "src/ui/screens/notification_view.h"
+#include "src/ui/screens/priority_alert.h"
+#include "src/ui/screens/control_panel.h"
+
+// --- Display Objects ---
 Arduino_DataBus *bus = new Arduino_ESP32SPI(
-  EXAMPLE_PIN_NUM_LCD_DC /* DC */, EXAMPLE_PIN_NUM_LCD_CS /* CS */,
-  EXAMPLE_PIN_NUM_LCD_SCLK /* SCK */, EXAMPLE_PIN_NUM_LCD_MOSI /* MOSI */, EXAMPLE_PIN_NUM_LCD_MISO /* MISO */);
+    PIN_LCD_DC, PIN_LCD_CS, PIN_LCD_SCLK, PIN_LCD_MOSI, PIN_LCD_MISO);
 
 Arduino_GFX *gfx = new Arduino_ST7789(
-  bus, EXAMPLE_PIN_NUM_LCD_RST /* RST */, EXAMPLE_LCD_ROTATION /* rotation */, true /* IPS */,
-  EXAMPLE_LCD_H_RES /* width */, EXAMPLE_LCD_V_RES /* height */);
+    bus, PIN_LCD_RST, LCD_ROTATION, true /* IPS */, LCD_H_RES, LCD_V_RES);
 
-// Enable debug output
-#define DEBUG_OUTPUT 1
-
-// Memory monitoring
-#define SHOW_MEM_INFO 1
-
-// Global objects
-ESP_Brookesia_Phone *phone = nullptr;
-static char buffer[128];
-static size_t internal_free = 0;
-static size_t internal_total = 0;
-static size_t external_free = 0;
-static size_t external_total = 0;
-
-// FreeRTOS handles
+// --- FreeRTOS Handles ---
 TaskHandle_t bleTaskHandle = NULL;
-TaskHandle_t sensorTaskHandle = NULL;
 QueueHandle_t notificationQueue = NULL;
 
 // Forward declarations
-static void onClockUpdateTimerCallback(struct _lv_timer_t *t);
 void bleTask(void *parameter);
-void sensorTask(void *parameter);
 void checkMemory();
+
+// BLE sync callbacks (called from BLE characteristic writes)
+void onTaskSyncReceived(const char *json, size_t len) {
+    TaskService::syncFromJSON(json, len);
+}
+
+void onTimeSyncReceived(uint32_t epoch) {
+    TimeService::setTimeFromEpoch(epoch);
+}
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("ESP32-S3 SmartWatch v3.0 Starting...");
-    
-    // Init Display
-    Serial.println("Initialize GFX display");
+    Serial.println("ESP32-S3 SmartWatch Starting...");
+
+    // --- Init Display ---
     if (!gfx->begin()) {
-        Serial.println("gfx->begin() failed!");
-        while(1) delay(100);
+        Serial.println("ERROR: gfx->begin() failed!");
+        while (1) delay(100);
     }
     gfx->fillScreen(BLACK);
 
-    // Init Backlight
-    ledcAttach(EXAMPLE_PIN_NUM_LCD_BL , LEDC_FREQ, LEDC_TIMER_10_BIT);
-    ledcWrite(EXAMPLE_PIN_NUM_LCD_BL , (1 << LEDC_TIMER_10_BIT) / 100 * 80);
-    
-    // Init Touch
-    Serial.println("Initialize touch device");
-    Wire.begin(EXAMPLE_PIN_NUM_TP_SDA, EXAMPLE_PIN_NUM_TP_SCL);
+    // Backlight at 80%
+    ledcAttach(PIN_LCD_BL, BL_FREQ, BL_RESOLUTION);
+    ledcWrite(PIN_LCD_BL, (1 << BL_RESOLUTION) / 100 * 80);
+
+    // --- Init Touch ---
+    Wire.begin(PIN_TP_SDA, PIN_TP_SCL);
     bsp_touch_init(&Wire, gfx->getRotation(), gfx->width(), gfx->height());
-    
-    // Initialize LVGL
-    Serial.println("Initialize LVGL");
+
+    // --- Init LVGL ---
     lvgl_port_init(gfx, nullptr);
-    
-    // Create esp-brookesia phone UI
-    Serial.println("Create and configure phone UI");
+
+    // --- Init Services ---
+    StorageService::init();
+    TaskService::init();
+    FocusService::init();
+    NotificationService::init();
+    ConnectivityService::init();
+    TimeService::init();
+    PowerService::init();
+
+    // --- Init UI system ---
     lvgl_port_lock(-1);
-    
-    phone = new ESP_Brookesia_Phone();
-    if (!phone) {
-        Serial.println("ERROR: Failed to create phone object");
-        while(1) delay(100);
-    }
 
-    // Use the default stylesheet that ships with esp-brookesia. The framework will
-    // auto-install and activate it when begin() runs if none is provided here.
+    // Theme (colors, styles, fonts)
+    theme_init();
 
-    // Configure phone UI callbacks
-    phone->registerLvLockCallback((ESP_Brookesia_LvLockCallback_t)(lvgl_port_lock), -1);
-    phone->registerLvUnlockCallback((ESP_Brookesia_LvUnlockCallback_t)(lvgl_port_unlock));
-    
-    // Start the phone UI
-    if (!phone->begin()) {
-        Serial.println("ERROR: Failed to begin phone");
-        while(1) delay(100);
-    }
-    
-    // Install smartwatch apps
-    Serial.println("Installing smartwatch apps...");
-    installWatchApps(phone);
-    
-    // Create clock update timer (1 second interval)
-    lv_timer_create(onClockUpdateTimerCallback, 60000, phone);
-    
+    // Status bar (persistent on lv_layer_top)
+    StatusBar::init();
+
+    // Register screens
+    ScreenManager::registerScreen(SCREEN_WATCH_FACE, WatchFace::create, WatchFace::destroy, "Watch Face");
+    ScreenManager::registerScreen(SCREEN_TASK_LIST, TaskList::create, TaskList::destroy, "Tasks");
+    ScreenManager::registerScreen(SCREEN_ACTIVE_TASK, ActiveTask::create, ActiveTask::destroy, "Active Task");
+    ScreenManager::registerScreen(SCREEN_NOTIFICATIONS, NotificationView::create, NotificationView::destroy, "Notifications");
+
+    // Start on watch face
+    ScreenManager::init();
+
     lvgl_port_unlock();
-    
-    // Create notification queue
-    notificationQueue = xQueueCreate(10, sizeof(NotificationData));
-    
-    // Initialize BLE for notifications
-    Serial.println("Initializing BLE notifications...");
+
+    // --- Notification queue for BLE -> UI ---
+    notificationQueue = xQueueCreate(20, sizeof(NotificationData));
+
+    // --- Init BLE ---
+    Serial.println("Initializing BLE...");
     initializeBLE();
-    
-    // Create FreeRTOS tasks
-    Serial.println("Creating FreeRTOS tasks...");
+
+    // --- BLE Task on Core 0 ---
     xTaskCreatePinnedToCore(
-        bleTask,        // Task function
-        "BLE_Task",     // Task name
-        4096,           // Stack size
-        NULL,           // Parameters
-        2,              // Priority
-        &bleTaskHandle, // Task handle
-        0               // Core 0
-    );
-    
-    xTaskCreatePinnedToCore(
-        sensorTask,      // Task function
-        "Sensor_Task",   // Task name
-        2048,            // Stack size
-        NULL,            // Parameters
-        1,               // Priority
-        &sensorTaskHandle, // Task handle
-        0                 // Core 0
-    );
-    
-    Serial.println("SmartWatch initialization complete!");
+        bleTask, "BLE_Task", 4096, NULL, 2, &bleTaskHandle, 0);
+
+    Serial.println("SmartWatch init complete!");
     checkMemory();
 }
 
 void loop() {
-    #if SHOW_MEM_INFO
-    // Monitor memory usage every 5 seconds
-    static unsigned long lastMemCheck = 0;
-    if (millis() - lastMemCheck > 5000) {
-        lastMemCheck = millis();
-        
-        internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-        internal_total = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
-        external_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        external_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-        
-        sprintf(buffer, "Memory - SRAM: %dKB/%dKB | PSRAM: %dKB/%dKB",
-                internal_free/1024, internal_total/1024,
-                external_free/1024, external_total/1024);
-        Serial.println(buffer);
-        
-        // Update memory display in UI if recents screen is active
-        phone->lockLv();
-        if (!phone->getHome().getRecentsScreen()->setMemoryLabel(
-                internal_free / 1024, internal_total / 1024, 
-                external_free / 1024, external_total / 1024)) {
-            // Recents screen not active, no problem
-        }
-        phone->unlockLv();
+    // Power management (runs every iteration)
+    PowerService::update();
+
+    static unsigned long lastUpdate = 0;
+    if (millis() - lastUpdate > 5000) {
+        lastUpdate = millis();
+
+        // Update status bar with live data
+        lvgl_port_lock(-1);
+        StatusBar::setBattery(getBatteryPercentage());
+        StatusBar::setBLEConnected(isBLEConnected());
+        lvgl_port_unlock();
+
+        // Memory monitoring
+        Serial.printf("Memory - SRAM: %dKB/%dKB | PSRAM: %dKB/%dKB\n",
+            heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024,
+            heap_caps_get_total_size(MALLOC_CAP_INTERNAL) / 1024,
+            heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024,
+            heap_caps_get_total_size(MALLOC_CAP_SPIRAM) / 1024);
     }
-    #endif
-    
-    // Main loop runs at lower frequency to save power
     vTaskDelay(pdMS_TO_TICKS(100));
 }
 
-// Clock update callback
-static void onClockUpdateTimerCallback(struct _lv_timer_t *t) {
-    time_t now;
-    struct tm timeinfo;
-    bool is_time_pm = false;
-    ESP_Brookesia_Phone *phone = (ESP_Brookesia_Phone *)t->user_data;
-    
-    time(&now);
-    localtime_r(&now, &timeinfo);
-    is_time_pm = (timeinfo.tm_hour >= 12);
-    
-    // Update clock on status bar
-    phone->getHome().getStatusBar()->setClock(
-        timeinfo.tm_hour, timeinfo.tm_min, is_time_pm
-    );
-}
-
-// BLE task - handles Bluetooth communication
 void bleTask(void *parameter) {
     Serial.println("BLE task started on core 0");
-    
-    while(1) {
-        // Process BLE events
+    NotificationData notif;
+
+    while (1) {
         processBLEEvents();
-        
-        // Check for disconnection/reconnection
+
+        // Process incoming notifications from BLE queue
+        while (xQueueReceive(notificationQueue, &notif, 0) == pdTRUE) {
+            lvgl_port_lock(-1);
+            bool isPriority = NotificationService::processIncoming(notif);
+            if (isPriority) {
+                PriorityAlert::show(notif.message);
+            }
+            lvgl_port_unlock();
+        }
+
         if (!isBLEConnected()) {
             attemptBLEReconnection();
         }
-        
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
-// Sensor task - reads IMU and battery
-void sensorTask(void *parameter) {
-    Serial.println("Sensor task started on core 0");
-    
-    while(1) {
-        // Read battery voltage
-        updateBatteryStatus();
-        
-        // Read IMU for step counting
-        updateStepCount();
-        
-        // Check for wrist raise gesture
-        if (checkWristRaise()) {
-            wakeDisplay();
-        }
-        
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
-
-// Memory monitoring helper
 void checkMemory() {
     Serial.println("=== Memory Status ===");
     Serial.printf("Total heap: %d bytes\n", ESP.getHeapSize());

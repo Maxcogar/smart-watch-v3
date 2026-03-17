@@ -29,8 +29,10 @@ struct NotificationData {
 };
 
 // BLE UUIDs for custom notification service (Android)
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define SERVICE_UUID            "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID     "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define TASK_CHAR_UUID          "beb5483e-36e1-4688-b7f5-ea07361b26a9"
+#define TIME_CHAR_UUID          "beb5483e-36e1-4688-b7f5-ea07361b26aa"
 
 // ANCS UUIDs for iOS
 #define ANCS_SERVICE_UUID "7905F431-B5CE-4E99-A40F-4B1E122D00D0"
@@ -42,9 +44,15 @@ struct NotificationData {
 BLEServer *pServer = NULL;
 BLEClient *pClient = NULL;
 BLECharacteristic *pCharacteristic = NULL;
+BLECharacteristic *pTaskCharacteristic = NULL;
+BLECharacteristic *pTimeCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 String connectedDeviceName = "";
+
+// External task sync callback (set from main code)
+extern void onTaskSyncReceived(const char *json, size_t len);
+extern void onTimeSyncReceived(uint32_t epoch);
 
 // External queue for notifications
 extern QueueHandle_t notificationQueue;
@@ -88,7 +96,7 @@ class MyCallbacks: public BLECharacteristicCallbacks {
             
             notif.timestamp = millis();
             notif.isRead = false;
-            notif.category = 3; // Default to social
+            notif.category = doc["category"] | 0;
             
             // Send to notification queue
             if (notificationQueue != NULL) {
@@ -96,6 +104,31 @@ class MyCallbacks: public BLECharacteristicCallbacks {
                 
                 // Vibrate on notification
                 vibrateMotor(200);
+            }
+        }
+    }
+};
+
+// Task sync callback
+class TaskSyncCallbacks: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+        std::string value = pCharacteristic->getValue().c_str();
+        if (value.length() > 0) {
+            Serial.println("Received task sync via BLE");
+            onTaskSyncReceived(value.c_str(), value.length());
+        }
+    }
+};
+
+// Time sync callback
+class TimeSyncCallbacks: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+        std::string value = pCharacteristic->getValue().c_str();
+        if (value.length() > 0) {
+            uint32_t epoch = strtoul(value.c_str(), NULL, 10);
+            if (epoch > 1000000000UL) {  // sanity check
+                Serial.printf("Received time sync: %lu\n", (unsigned long)epoch);
+                onTimeSyncReceived(epoch);
             }
         }
     }
@@ -139,7 +172,21 @@ void initializeBLE() {
     
     // Set initial value
     pCharacteristic->setValue("ESP32 Watch Ready");
-    
+
+    // Create task sync characteristic
+    pTaskCharacteristic = pService->createCharacteristic(
+        TASK_CHAR_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    pTaskCharacteristic->setCallbacks(new TaskSyncCallbacks());
+
+    // Create time sync characteristic
+    pTimeCharacteristic = pService->createCharacteristic(
+        TIME_CHAR_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    pTimeCharacteristic->setCallbacks(new TimeSyncCallbacks());
+
     // Start the service
     pService->start();
     
@@ -168,7 +215,7 @@ void stopBLEAdvertising() {
 void processBLEEvents() {
     // Handle disconnection
     if (!deviceConnected && oldDeviceConnected) {
-        delay(500);  // Give bluetooth stack time to get ready
+        vTaskDelay(pdMS_TO_TICKS(500));  // Non-blocking delay for BT stack
         startBLEAdvertising();  // Restart advertising
         Serial.println("Restarted advertising after disconnect");
         oldDeviceConnected = deviceConnected;

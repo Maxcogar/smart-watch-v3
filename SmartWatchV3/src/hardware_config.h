@@ -1,5 +1,13 @@
 /**
  * Hardware configuration for the Waveshare ESP32-S3 Touch LCD 2.0".
+ *
+ * Pin assignments and peripheral constants come from the manufacturer's
+ * reference examples and ESP_Panel_Board_Custom.h — NOT from guesswork.
+ *
+ * Backlight control uses the Arduino LEDC API (ledcAttach / ledcWrite),
+ * matching every working manufacturer example.  Do NOT mix in ESP-IDF
+ * ledc_set_duty / ledc_update_duty calls — they conflict with the
+ * Arduino wrapper on ESP32 Arduino Core 3.x.
  */
 
 #ifndef HARDWARE_CONFIG_H
@@ -11,13 +19,9 @@
 #endif
 
 #include <Arduino.h>
-#include "esp32-hal-ledc.h"
-#include <esp_err.h>
-#include <driver/i2c.h>
-#include <driver/ledc.h>
 #include <esp_sleep.h>
 
-// Display (ST7789 over SPI)
+// ─── Display (ST7789 over SPI) ──────────────────────────────────────
 #define TFT_WIDTH    240
 #define TFT_HEIGHT   320
 #define TFT_SPI_HOST HSPI
@@ -29,47 +33,46 @@
 #define TFT_RST      -1
 #define TFT_BL       1
 
-// Touch controller (CST816 family)
-#define TOUCH_SDA    48
-#define TOUCH_SCL    47
-#define TOUCH_INT    -1
-#define TOUCH_RST    -1
+// ─── Touch controller (CST816S, I2C) ───────────────────────────────
+#define TOUCH_SDA      48
+#define TOUCH_SCL      47
+#define TOUCH_INT      -1
+#define TOUCH_RST      -1
 #define TOUCH_I2C_ADDR 0x15
 
-// IMU (QMI8658 shares the same I2C bus)
+// ─── IMU (QMI8658, shares I2C bus with touch) ──────────────────────
 #define IMU_SDA      TOUCH_SDA
 #define IMU_SCL      TOUCH_SCL
 #define IMU_INT1     -1
 #define IMU_INT2     -1
 #define IMU_I2C_ADDR 0x6B
 
-// Battery monitoring (voltage divider ~2:1 on GPIO5)
-#define BATTERY_PIN  5
-#define CHARGE_PIN   -1
-#define BATTERY_DIVIDER_RATIO 2.00f
-#define BATTERY_MAX_VOLTAGE   4.20f
-#define BATTERY_MIN_VOLTAGE   3.00f
+// ─── Battery monitoring (voltage divider on GPIO5) ─────────────────
+#define BATTERY_PIN            5
+#define CHARGE_PIN             -1
+#define BATTERY_DIVIDER_RATIO  2.00f
+#define BATTERY_MAX_VOLTAGE    4.20f
+#define BATTERY_MIN_VOLTAGE    3.00f
 
-// Buttons
-#define BUTTON_POWER 0
-#define BUTTON_USER  -1
+// ─── Buttons ────────────────────────────────────────────────────────
+#define BUTTON_POWER  0
+#define BUTTON_USER   -1
 
-// Backlight PWM
-#define BACKLIGHT_LEDC_MODE       LEDC_LOW_SPEED_MODE
-#define BACKLIGHT_LEDC_CHANNEL    LEDC_CHANNEL_0
-#define BACKLIGHT_LEDC_TIMER      LEDC_TIMER_0
+// ─── Backlight PWM (Arduino API — matches manufacturer examples) ───
+//     Examples use: ledcAttach(pin, 5000, 10);  ledcWrite(pin, duty);
+//     10-bit resolution → duty 0–1023.
 #define BACKLIGHT_LEDC_FREQ       5000
-#define BACKLIGHT_LEDC_RES_BITS   LEDC_TIMER_10_BIT
-#define BACKLIGHT_LEDC_RESOLUTION_BITS LEDC_TIMER_10_BIT
+#define BACKLIGHT_LEDC_BITS       10        // plain integer, NOT an enum
+#define BACKLIGHT_MAX_DUTY        ((1 << BACKLIGHT_LEDC_BITS) - 1)  // 1023
 
+// Convenience brightness levels (0-255 scale, mapped to 0-1023 duty)
 #define BRIGHTNESS_MIN    8
 #define BRIGHTNESS_LOW    32
 #define BRIGHTNESS_MEDIUM 128
 #define BRIGHTNESS_HIGH   200
 #define BRIGHTNESS_MAX    255
 
-// Function declarations
-void initializeHardware();
+// ─── Function declarations ──────────────────────────────────────────
 void setDisplayBrightness(uint8_t brightness);
 float readBatteryVoltage();
 uint8_t getBatteryPercentage();
@@ -81,51 +84,24 @@ void enableLightSleep();
 void wakeDisplay();
 void vibrateMotor(uint16_t duration_ms);
 
+// ─── Internal state ─────────────────────────────────────────────────
 namespace hardware_detail {
     inline uint8_t g_backlightLevel = BRIGHTNESS_MEDIUM;
-    inline float g_lastBatteryVoltage = 0.0f;
+    inline float   g_lastBatteryVoltage = 0.0f;
     inline uint8_t g_lastBatteryPercent = 0;
 }
 
-
-inline void configureBacklightPWM()
-{
-    ledc_timer_config_t timer_cfg = {
-        .speed_mode = BACKLIGHT_LEDC_MODE,
-        .duty_resolution = BACKLIGHT_LEDC_RES_BITS,
-        .timer_num = BACKLIGHT_LEDC_TIMER,
-        .freq_hz = BACKLIGHT_LEDC_FREQ,
-        .clk_cfg = LEDC_AUTO_CLK,
-    };
-    ledc_timer_config(&timer_cfg);
-
-    ledc_channel_config_t channel_cfg = {
-        .gpio_num = TFT_BL,
-        .speed_mode = BACKLIGHT_LEDC_MODE,
-        .channel = BACKLIGHT_LEDC_CHANNEL,
-        .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = BACKLIGHT_LEDC_TIMER,
-        .duty = 0,
-        .hpoint = 0,
-        .flags = {.output_invert = 0},
-    };
-    ledc_channel_config(&channel_cfg);
-
-    setDisplayBrightness(hardware_detail::g_backlightLevel);
-}
-
-void initializeHardware() { /* Now handled by ESP_Panel_Library */ }
-
+// ─── Backlight ──────────────────────────────────────────────────────
+// Uses Arduino ledcWrite — the same API every manufacturer example uses.
 inline void setDisplayBrightness(uint8_t brightness)
 {
     hardware_detail::g_backlightLevel = constrain(brightness, 0, 255);
-    const uint16_t maxDuty = (1u << BACKLIGHT_LEDC_RESOLUTION_BITS) - 1;
-    const uint32_t duty = map(hardware_detail::g_backlightLevel, 0, 255, 0, maxDuty);
-    ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, duty);
-    ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
-
+    // Map 0-255 to 0-1023 (10-bit duty)
+    const uint32_t duty = map(hardware_detail::g_backlightLevel, 0, 255, 0, BACKLIGHT_MAX_DUTY);
+    ledcWrite(TFT_BL, duty);
 }
 
+// ─── Battery ────────────────────────────────────────────────────────
 inline float readBatteryVoltage()
 {
     if (BATTERY_PIN < 0) {
@@ -138,6 +114,8 @@ inline float readBatteryVoltage()
         accum += analogRead(BATTERY_PIN);
     }
     const float avg = static_cast<float>(accum) / samples;
+    // Example 06_lvgl_battery uses: voltage = 3.3 / 4096 * analogValue * 3
+    // We use the documented 2:1 divider ratio for this board variant.
     const float voltage = (avg * 3.30f / 4095.0f) * BATTERY_DIVIDER_RATIO;
     return voltage;
 }
@@ -173,9 +151,12 @@ inline void updateBatteryStatus()
     hardware_detail::g_lastBatteryPercent = getBatteryPercentage();
 }
 
+// ─── IMU stubs ──────────────────────────────────────────────────────
 inline void updateStepCount()
 {
     // TODO: Integrate FastIMU QMI8658 driver for step counting.
+    //       See example 04_qmi8658_output and 05_lvgl_qmi8658 for
+    //       working IMU init and read patterns on this exact hardware.
 }
 
 inline bool checkWristRaise()
@@ -184,6 +165,7 @@ inline bool checkWristRaise()
     return false;
 }
 
+// ─── Power management ───────────────────────────────────────────────
 inline void enableLightSleep()
 {
     setDisplayBrightness(BRIGHTNESS_MIN);
@@ -198,6 +180,7 @@ inline void wakeDisplay()
     setDisplayBrightness(hardware_detail::g_backlightLevel);
 }
 
+// ─── Haptics ────────────────────────────────────────────────────────
 inline void vibrateMotor(uint16_t duration_ms)
 {
     constexpr int MOTOR_PIN = -1;
@@ -211,6 +194,3 @@ inline void vibrateMotor(uint16_t duration_ms)
 }
 
 #endif // HARDWARE_CONFIG_H
-
-
-
