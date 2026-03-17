@@ -15,6 +15,7 @@
 #include "../gesture.h"
 #include "../screen_manager.h"
 #include "../widgets/status_bar.h"
+#include "control_panel.h"
 
 static lv_obj_t *_timeLabel = NULL;
 static lv_obj_t *_dateLabel = NULL;
@@ -59,7 +60,12 @@ static void _onTaskCardTap(lv_event_t *e) {
 static void _onGesture(GestureDir dir, int16_t startX, int16_t startY) {
     switch (dir) {
         case GESTURE_LEFT:
-            ScreenManager::navigate(SCREEN_TASK_LIST, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200);
+            // Right-edge swipe opens control panel
+            if (startX > SCREEN_WIDTH - 40) {
+                ControlPanel::show();
+            } else {
+                ScreenManager::navigate(SCREEN_TASK_LIST, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200);
+            }
             break;
         case GESTURE_UP:
             ScreenManager::navigate(SCREEN_NOTIFICATIONS, LV_SCR_LOAD_ANIM_MOVE_BOTTOM, 200);

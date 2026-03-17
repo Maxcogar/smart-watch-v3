@@ -17,6 +17,7 @@
 #include "../gesture.h"
 #include "../screen_manager.h"
 #include "../../services/task_service.h"
+#include "control_panel.h"
 
 static lv_obj_t *_listContainer = NULL;
 
@@ -36,6 +37,11 @@ static void _onTaskTap(lv_event_t *e) {
 
 static void _onGesture(GestureDir dir, int16_t startX, int16_t startY) {
     switch (dir) {
+        case GESTURE_LEFT:
+            if (startX > SCREEN_WIDTH - 40) {
+                ControlPanel::show();
+            }
+            break;
         case GESTURE_RIGHT:
             ScreenManager::goBack();
             break;

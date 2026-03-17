@@ -61,6 +61,8 @@
 #include "src/services/task_service.h"
 #include "src/services/focus_service.h"
 #include "src/services/notification_service.h"
+#include "src/services/connectivity_service.h"
+#include "src/services/time_service.h"
 
 // UI system
 #include "src/ui/theme.h"
@@ -72,6 +74,7 @@
 #include "src/ui/screens/active_task.h"
 #include "src/ui/screens/notification_view.h"
 #include "src/ui/screens/priority_alert.h"
+#include "src/ui/screens/control_panel.h"
 
 // --- Display Objects ---
 Arduino_DataBus *bus = new Arduino_ESP32SPI(
@@ -115,6 +118,8 @@ void setup() {
     TaskService::init();
     FocusService::init();
     NotificationService::init();
+    ConnectivityService::init();
+    TimeService::init();
 
     // --- Init UI system ---
     lvgl_port_lock(-1);
