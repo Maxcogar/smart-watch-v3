@@ -60,6 +60,7 @@
 #include "src/services/storage_service.h"
 #include "src/services/task_service.h"
 #include "src/services/focus_service.h"
+#include "src/services/notification_service.h"
 
 // UI system
 #include "src/ui/theme.h"
@@ -70,6 +71,7 @@
 #include "src/ui/screens/task_list.h"
 #include "src/ui/screens/active_task.h"
 #include "src/ui/screens/notification_view.h"
+#include "src/ui/screens/priority_alert.h"
 
 // --- Display Objects ---
 Arduino_DataBus *bus = new Arduino_ESP32SPI(
@@ -112,6 +114,7 @@ void setup() {
     StorageService::init();
     TaskService::init();
     FocusService::init();
+    NotificationService::init();
 
     // --- Init UI system ---
     lvgl_port_lock(-1);
@@ -171,8 +174,21 @@ void loop() {
 
 void bleTask(void *parameter) {
     Serial.println("BLE task started on core 0");
+    NotificationData notif;
+
     while (1) {
         processBLEEvents();
+
+        // Process incoming notifications from BLE queue
+        while (xQueueReceive(notificationQueue, &notif, 0) == pdTRUE) {
+            lvgl_port_lock(-1);
+            bool isPriority = NotificationService::processIncoming(notif);
+            if (isPriority) {
+                PriorityAlert::show(notif.message);
+            }
+            lvgl_port_unlock();
+        }
+
         if (!isBLEConnected()) {
             attemptBLEReconnection();
         }
