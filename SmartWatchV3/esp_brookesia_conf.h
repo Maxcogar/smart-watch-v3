@@ -62,12 +62,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////// Memory /////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#define ESP_BROOKESIA_MEMORY_USE_CUSTOM    (0)
+#define ESP_BROOKESIA_MEMORY_USE_CUSTOM    (1)
 #if ESP_BROOKESIA_MEMORY_USE_CUSTOM == 0
 #define ESP_BROOKESIA_MEMORY_INCLUDE       <stdlib.h>
 #define ESP_BROOKESIA_MEMORY_MALLOC        malloc
 #define ESP_BROOKESIA_MEMORY_FREE          free
 #else
+/* Use PSRAM for esp-brookesia allocations to avoid exhausting internal SRAM */
 #define ESP_BROOKESIA_MEMORY_INCLUDE       "esp_heap_caps.h"
 #define ESP_BROOKESIA_MEMORY_MALLOC(x)     heap_caps_aligned_alloc(1, x, MALLOC_CAP_SPIRAM)
 #define ESP_BROOKESIA_MEMORY_FREE          free

@@ -168,7 +168,7 @@ void stopBLEAdvertising() {
 void processBLEEvents() {
     // Handle disconnection
     if (!deviceConnected && oldDeviceConnected) {
-        delay(500);  // Give bluetooth stack time to get ready
+        vTaskDelay(pdMS_TO_TICKS(500));  // Non-blocking delay for BT stack
         startBLEAdvertising();  // Restart advertising
         Serial.println("Restarted advertising after disconnect");
         oldDeviceConnected = deviceConnected;

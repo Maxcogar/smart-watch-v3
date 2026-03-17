@@ -42,9 +42,6 @@
 #define EXAMPLE_PIN_NUM_TP_SDA 48
 #define EXAMPLE_PIN_NUM_TP_SCL 47
 
-#define LEDC_FREQ             5000
-
-
 #define EXAMPLE_LCD_ROTATION 0
 #define EXAMPLE_LCD_H_RES 240
 #define EXAMPLE_LCD_V_RES 320
@@ -105,9 +102,9 @@ void setup() {
     }
     gfx->fillScreen(BLACK);
 
-    // Init Backlight
-    ledcAttach(EXAMPLE_PIN_NUM_LCD_BL , LEDC_FREQ, LEDC_TIMER_10_BIT);
-    ledcWrite(EXAMPLE_PIN_NUM_LCD_BL , (1 << LEDC_TIMER_10_BIT) / 100 * 80);
+    // Init Backlight using ESP-IDF LEDC API (must match hardware_config.h)
+    configureBacklightPWM();
+    setDisplayBrightness(BRIGHTNESS_HIGH);
     
     // Init Touch
     Serial.println("Initialize touch device");
@@ -128,30 +125,43 @@ void setup() {
         while(1) delay(100);
     }
 
-    // Use the default stylesheet that ships with esp-brookesia. The framework will
-    // auto-install and activate it when begin() runs if none is provided here.
-
-    // Configure phone UI callbacks
+    // Configure phone UI callbacks (must be set before begin)
     phone->registerLvLockCallback((ESP_Brookesia_LvLockCallback_t)(lvgl_port_lock), -1);
     phone->registerLvUnlockCallback((ESP_Brookesia_LvUnlockCallback_t)(lvgl_port_unlock));
-    
+
+    // Use the small (240x240) stylesheet and adapt for our 240x320 display.
+    // esp-brookesia requires an explicit stylesheet; relying on auto-detect often
+    // fails on non-standard resolutions.
+    ESP_Brookesia_PhoneStylesheet_t *stylesheet = new ESP_Brookesia_PhoneStylesheet_t;
+    *stylesheet = ESP_BROOKESIA_PHONE_DEFAULT_DARK_STYLESHEET();
+    // Patch resolution to match our display
+    stylesheet->core.screen_size = {EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES};
+    if (!phone->addStylesheet(stylesheet)) {
+        Serial.println("WARNING: Failed to add stylesheet, trying begin without it");
+    }
+
     // Start the phone UI
     if (!phone->begin()) {
         Serial.println("ERROR: Failed to begin phone");
-        while(1) delay(100);
+        // Try once more with a clean default (no custom stylesheet)
+        Serial.println("Retrying phone->begin()...");
+        if (!phone->begin()) {
+            Serial.println("ERROR: phone->begin() failed on retry");
+            while(1) delay(100);
+        }
     }
     
+    // Create notification queue BEFORE installing apps (apps reference it)
+    notificationQueue = xQueueCreate(10, sizeof(NotificationData));
+
     // Install smartwatch apps
     Serial.println("Installing smartwatch apps...");
     installWatchApps(phone);
-    
-    // Create clock update timer (1 second interval)
+
+    // Create clock update timer (60 second interval)
     lv_timer_create(onClockUpdateTimerCallback, 60000, phone);
-    
+
     lvgl_port_unlock();
-    
-    // Create notification queue
-    notificationQueue = xQueueCreate(10, sizeof(NotificationData));
     
     // Initialize BLE for notifications
     Serial.println("Initializing BLE notifications...");
@@ -201,13 +211,15 @@ void loop() {
         Serial.println(buffer);
         
         // Update memory display in UI if recents screen is active
-        phone->lockLv();
-        if (!phone->getHome().getRecentsScreen()->setMemoryLabel(
-                internal_free / 1024, internal_total / 1024, 
-                external_free / 1024, external_total / 1024)) {
-            // Recents screen not active, no problem
+        // (guard against null — recents screen may not exist yet)
+        lvgl_port_lock(-1);
+        auto *recents = phone->getHome().getRecentsScreen();
+        if (recents) {
+            recents->setMemoryLabel(
+                internal_free / 1024, internal_total / 1024,
+                external_free / 1024, external_total / 1024);
         }
-        phone->unlockLv();
+        lvgl_port_unlock();
     }
     #endif
     

@@ -24,8 +24,6 @@ bool bsp_touch_i2c_reg8_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, 
     *data++ = g_touch_i2c->read();
   }
   return true;
-
-  return false;
 }
 
 bool bsp_touch_i2c_reg8_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint8_t len) {
@@ -41,8 +39,6 @@ bool bsp_touch_i2c_reg8_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data,
     return false;
   }
   return true;
-
-  return false;
 }
 
 
@@ -65,7 +61,7 @@ bool bsp_touch_init(TwoWire *touch_i2c, uint8_t touch_rotation, uint16_t width, 
     Serial.println("Find CST816!");
     return true;
   }
-  Serial.println("QMI8658 read data fail!");
+  Serial.println("CST816 not found (expected ID 0xB6)!");
   return false;
 }
 

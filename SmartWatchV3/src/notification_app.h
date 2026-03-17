@@ -18,19 +18,20 @@ public:
 
     bool run() override
     {
-        screen = lv_obj_create(nullptr);
+        // Use the active screen provided by esp-brookesia (do NOT create/load
+        // a raw screen — that bypasses the framework's screen management and
+        // causes the phone UI to lose track of the app).
+        screen = lv_scr_act();
         lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
 
         notification_list = lv_list_create(screen);
-        lv_obj_set_size(notification_list, TFT_WIDTH, TFT_HEIGHT);
+        lv_obj_set_size(notification_list, lv_pct(100), lv_pct(100));
         lv_obj_center(notification_list);
 
         lv_obj_set_style_bg_color(notification_list, lv_color_black(), 0);
         lv_obj_set_style_border_width(notification_list, 0, 0);
 
         update_timer = lv_timer_create(timerCallback, 500, this);
-
-        lv_scr_load(screen);
 
         return true;
     }
@@ -71,7 +72,7 @@ private:
 
             lv_obj_t *label = lv_obj_get_child(btn, 0); // Get the label child of the button
             lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
-            lv_obj_set_width(label, TFT_WIDTH - 40);
+            lv_obj_set_width(label, lv_pct(90));
 
             lv_list_add_text(notification_list, notif.message);
         }
