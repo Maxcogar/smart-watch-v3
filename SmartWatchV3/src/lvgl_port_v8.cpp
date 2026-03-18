@@ -1,15 +1,14 @@
 /**
- * LVGL Porting Layer Implementation
+ * LVGL Porting Layer Implementation — LVGL 9.x API
  *
  * This follows the EXACT rendering pattern from the manufacturer's working
- * examples (05_lvgl_qmi8658, 09_lvgl_camera):
+ * examples (05_lvgl_qmi8658, 09_lvgl_camera), updated for LVGL 9 API:
  *
- *   - Full-screen framebuffer (240 * 320 pixels)
- *   - direct_mode = true
+ *   - Full-screen framebuffer (320 * 240 pixels in landscape)
+ *   - LV_DISPLAY_RENDER_MODE_DIRECT
  *   - Single draw buffer (no double-buffering)
  *   - Buffer allocation: try INTERNAL|8BIT first, fall back to 8BIT
- *   - Flush callback does the full-screen draw with the correct
- *     draw16bitRGBBitmap / draw16bitBeRGBBitmap depending on LV_COLOR_16_SWAP
+ *   - Flush callback does the full-screen draw
  *   - Touch read via bsp_cst816, identical to examples
  *
  * Additions beyond the simple examples:
@@ -25,10 +24,9 @@
 #include <Arduino_GFX_Library.h>
 
 // Static variables
-static lv_disp_draw_buf_t draw_buf;
-static lv_disp_drv_t      disp_drv;
-static lv_indev_drv_t     indev_drv;
-static lv_color_t        *disp_draw_buf = NULL;
+static uint8_t           *disp_draw_buf = NULL;
+static lv_display_t      *disp         = NULL;
+static lv_indev_t        *indev        = NULL;
 
 static SemaphoreHandle_t  lvgl_mutex      = NULL;
 static TaskHandle_t       lvgl_task_handle = NULL;
@@ -39,8 +37,8 @@ static uint32_t screenHeight;
 static uint32_t bufSize;
 
 // Forward declarations
-static void lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
-static void lvgl_touch_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
+static void lvgl_flush_cb(lv_display_t *display, const lv_area_t *area, uint8_t *px_map);
+static void lvgl_touch_cb(lv_indev_t *indev_drv, lv_indev_data_t *data);
 static void lvgl_tick_task(void *arg);
 static void lvgl_task(void *arg);
 
@@ -48,26 +46,27 @@ static void lvgl_task(void *arg);
  * Initialize LVGL with display and touch.
  *
  * The buffer allocation and display-driver setup mirror examples
- * 05_lvgl_qmi8658 and 09_lvgl_camera line-for-line.
+ * 05_lvgl_qmi8658 and 09_lvgl_camera, updated for LVGL 9 API.
  */
 void lvgl_port_init(void *lcd, void *touch) {
     gfx = (Arduino_GFX *)lcd;
 
-    // ---- LVGL core init (same as examples) ----
+    // ---- LVGL core init ----
     lv_init();
 
     screenWidth  = gfx->width();
     screenHeight = gfx->height();
-    bufSize      = screenWidth * screenHeight;   // full-screen buffer
+    bufSize      = screenWidth * screenHeight;   // full-screen buffer (in pixels)
 
     // ---- Buffer allocation — identical to examples ----
-    // Try internal RAM first, fall back to any available (may hit PSRAM)
-    disp_draw_buf = (lv_color_t *)heap_caps_malloc(
-        bufSize * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    // RGB565 = 2 bytes per pixel
+    uint32_t bufBytes = bufSize * sizeof(uint16_t);
+
+    disp_draw_buf = (uint8_t *)heap_caps_malloc(
+        bufBytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!disp_draw_buf) {
         Serial.println("Internal RAM insufficient, falling back...");
-        disp_draw_buf = (lv_color_t *)heap_caps_malloc(
-            bufSize * sizeof(lv_color_t), MALLOC_CAP_8BIT);
+        disp_draw_buf = (uint8_t *)heap_caps_malloc(bufBytes, MALLOC_CAP_8BIT);
     }
 
     if (!disp_draw_buf) {
@@ -76,25 +75,19 @@ void lvgl_port_init(void *lcd, void *touch) {
     }
 
     Serial.printf("LVGL buffer allocated: %u pixels (%u bytes)\n",
-                  bufSize, (unsigned)(bufSize * sizeof(lv_color_t)));
+                  bufSize, bufBytes);
 
-    // Single buffer, NULL for second — matches examples exactly
-    lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, bufSize);
+    // ---- Display driver (LVGL 9 API) ----
+    disp = lv_display_create(screenWidth, screenHeight);
+    lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
+    lv_display_set_flush_cb(disp, lvgl_flush_cb);
+    lv_display_set_buffers(disp, disp_draw_buf, NULL, bufBytes,
+                           LV_DISPLAY_RENDER_MODE_DIRECT);
 
-    // ---- Display driver — matches examples ----
-    lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res     = screenWidth;
-    disp_drv.ver_res     = screenHeight;
-    disp_drv.flush_cb    = lvgl_flush_cb;
-    disp_drv.draw_buf    = &draw_buf;
-    disp_drv.direct_mode = true;           // <-- critical, matches examples
-    lv_disp_drv_register(&disp_drv);
-
-    // ---- Touch input driver — identical to examples ----
-    lv_indev_drv_init(&indev_drv);
-    indev_drv.type    = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = lvgl_touch_cb;
-    lv_indev_drv_register(&indev_drv);
+    // ---- Touch input driver (LVGL 9 API) ----
+    indev = lv_indev_create();
+    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(indev, lvgl_touch_cb);
 
     // ---- Recursive mutex (from example 09_lvgl_camera) ----
     lvgl_mutex = xSemaphoreCreateRecursiveMutex();
@@ -153,33 +146,27 @@ bool lvgl_port_lock_ready(void) {
 }
 
 /**
- * Display flush callback.
+ * Display flush callback (LVGL 9 API).
  *
- * Matches example 09_lvgl_camera — full-screen draw in flush, with the
- * LV_COLOR_16_SWAP check that ALL manufacturer examples use.
+ * Matches example 09_lvgl_camera — full-screen draw in flush.
+ * In LVGL 9, px_map is uint8_t* and we cast to uint16_t* for RGB565.
  */
-static void lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
+static void lvgl_flush_cb(lv_display_t *display, const lv_area_t *area, uint8_t *px_map) {
     if (!gfx) {
-        lv_disp_flush_ready(disp);
+        lv_display_flush_ready(display);
         return;
     }
 
     // Full-screen blit — matches examples' direct_mode pattern.
-    // The LV_COLOR_16_SWAP check selects the correct byte-order draw function,
-    // exactly as every working example does.
-#if (LV_COLOR_16_SWAP != 0)
-    gfx->draw16bitBeRGBBitmap(0, 0, (uint16_t *)disp_draw_buf, screenWidth, screenHeight);
-#else
     gfx->draw16bitRGBBitmap(0, 0, (uint16_t *)disp_draw_buf, screenWidth, screenHeight);
-#endif
 
-    lv_disp_flush_ready(disp);
+    lv_display_flush_ready(display);
 }
 
 /**
- * Touch read callback — identical to examples.
+ * Touch read callback (LVGL 9 API).
  */
-static void lvgl_touch_cb(lv_indev_drv_t *indev, lv_indev_data_t *data) {
+static void lvgl_touch_cb(lv_indev_t *indev_drv, lv_indev_data_t *data) {
     uint16_t touchpad_x;
     uint16_t touchpad_y;
 
@@ -209,7 +196,7 @@ static void lvgl_task(void *arg) {
 
     while (1) {
         if (xSemaphoreTakeRecursive(lvgl_mutex, portMAX_DELAY) == pdTRUE) {
-            lv_task_handler();
+            lv_timer_handler();
             xSemaphoreGiveRecursive(lvgl_mutex);
         }
         vTaskDelay(pdMS_TO_TICKS(5));   // ~200 Hz, matches example 09

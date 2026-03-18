@@ -7,6 +7,7 @@
  */
 
 #include "priority_alert.h"
+#include <cstring>
 #include "../theme.h"
 
 static lv_obj_t *_overlay = NULL;
