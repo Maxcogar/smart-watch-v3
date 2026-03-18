@@ -136,7 +136,6 @@ void TaskList::create(lv_obj_t *screen) {
     lv_obj_add_flag(_listContainer, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(_listContainer, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(_listContainer, LV_SCROLLBAR_MODE_AUTO);
-    lv_obj_set_style_scrollbar_mode(_listContainer, LV_SCROLLBAR_MODE_AUTO, 0);
 
     _buildList();
 
