@@ -7,6 +7,7 @@
 #ifndef TASK_SERVICE_H
 #define TASK_SERVICE_H
 
+#include <stddef.h>
 #include "storage_service.h"
 
 namespace TaskService {

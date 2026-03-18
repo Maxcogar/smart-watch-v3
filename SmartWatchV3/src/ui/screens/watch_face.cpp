@@ -11,6 +11,7 @@
  */
 
 #include "watch_face.h"
+#include <ctime>
 #include "../theme.h"
 #include "../gesture.h"
 #include "../screen_manager.h"
