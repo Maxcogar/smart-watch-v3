@@ -24,7 +24,7 @@ static lv_obj_t *_batteryDetail = NULL;
 #define PANEL_WIDTH 200
 
 static void _onOverlayTap(lv_event_t *e) {
-    lv_obj_t *target = (lv_obj_t *)lv_event_get_target(e);
+    lv_obj_t *target = lv_event_get_target(e);
     // Only dismiss if tapping the overlay background, not the panel
     if (target == _overlay) {
         ControlPanel::hide();
@@ -32,7 +32,7 @@ static void _onOverlayTap(lv_event_t *e) {
 }
 
 static void _onBrightnessChange(lv_event_t *e) {
-    lv_obj_t *slider = (lv_obj_t *)lv_event_get_target(e);
+    lv_obj_t *slider = lv_event_get_target(e);
     int32_t val = lv_slider_get_value(slider);
     // Map 0-100 to 0-255
     uint8_t brightness = (uint8_t)(val * 255 / 100);
@@ -40,7 +40,7 @@ static void _onBrightnessChange(lv_event_t *e) {
 }
 
 static void _onWifiToggle(lv_event_t *e) {
-    lv_obj_t *sw = (lv_obj_t *)lv_event_get_target(e);
+    lv_obj_t *sw = lv_event_get_target(e);
     bool on = lv_obj_has_state(sw, LV_STATE_CHECKED);
     if (on) {
         // Load WiFi creds from storage
@@ -57,7 +57,7 @@ static void _onWifiToggle(lv_event_t *e) {
 }
 
 static void _onCompressorToggle(lv_event_t *e) {
-    lv_obj_t *sw = (lv_obj_t *)lv_event_get_target(e);
+    lv_obj_t *sw = lv_event_get_target(e);
     bool on = lv_obj_has_state(sw, LV_STATE_CHECKED);
 
     WatchSettings settings;

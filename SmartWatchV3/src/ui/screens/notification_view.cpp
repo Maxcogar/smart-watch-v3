@@ -32,7 +32,7 @@ struct SwipeState {
 
 static void _onCardSwipe(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t *card = (lv_obj_t *)lv_event_get_target(e);
+    lv_obj_t *card = lv_event_get_target(e);
     SwipeState *state = (SwipeState *)lv_event_get_user_data(e);
     if (!state) return;
 

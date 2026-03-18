@@ -25,8 +25,7 @@ lv_style_t style_list_item;
 static lv_style_transition_dsc_t _press_transition;
 static const lv_style_prop_t _press_props[] = {
     LV_STYLE_BG_COLOR,
-    LV_STYLE_TRANSFORM_SCALE_X,
-    LV_STYLE_TRANSFORM_SCALE_Y,
+    LV_STYLE_TRANSFORM_ZOOM,
     LV_STYLE_PROP_INV  // sentinel
 };
 
@@ -59,8 +58,7 @@ void theme_init(void) {
     // === Card (pressed state) ===
     lv_style_init(&style_card_pressed);
     lv_style_set_bg_color(&style_card_pressed, COLOR_BG_ELEVATED);
-    lv_style_set_transform_scale_x(&style_card_pressed, 245);  // ~96% scale
-    lv_style_set_transform_scale_y(&style_card_pressed, 245);
+    lv_style_set_transform_zoom(&style_card_pressed, 245);  // ~96% scale
     lv_style_set_transition(&style_card_pressed, &_press_transition);
 
     // === Primary Button (default) ===
@@ -82,8 +80,7 @@ void theme_init(void) {
     // === Primary Button (pressed) ===
     lv_style_init(&style_btn_primary_pressed);
     lv_style_set_bg_color(&style_btn_primary_pressed, lv_color_darken(COLOR_ACCENT, LV_OPA_20));
-    lv_style_set_transform_scale_x(&style_btn_primary_pressed, 245);
-    lv_style_set_transform_scale_y(&style_btn_primary_pressed, 245);
+    lv_style_set_transform_zoom(&style_btn_primary_pressed, 245);
     lv_style_set_shadow_opa(&style_btn_primary_pressed, LV_OPA_10);
     lv_style_set_transition(&style_btn_primary_pressed, &_press_transition);
 
@@ -103,8 +100,7 @@ void theme_init(void) {
     lv_style_init(&style_btn_ghost_pressed);
     lv_style_set_bg_color(&style_btn_ghost_pressed, COLOR_ACCENT);
     lv_style_set_bg_opa(&style_btn_ghost_pressed, LV_OPA_20);
-    lv_style_set_transform_scale_x(&style_btn_ghost_pressed, 245);
-    lv_style_set_transform_scale_y(&style_btn_ghost_pressed, 245);
+    lv_style_set_transform_zoom(&style_btn_ghost_pressed, 245);
     lv_style_set_transition(&style_btn_ghost_pressed, &_press_transition);
 
     // === Label: Time (48px) ===

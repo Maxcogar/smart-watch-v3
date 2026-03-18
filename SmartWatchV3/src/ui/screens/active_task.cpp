@@ -290,7 +290,7 @@ static void _showCompletionCelebration(void) {
 
     // Auto-remove after 3 seconds
     lv_timer_t *removeTimer = lv_timer_create([](lv_timer_t *t) {
-        lv_obj_t *obj = (lv_obj_t *)lv_timer_get_user_data(t);
+        lv_obj_t *obj = (lv_obj_t *)t->user_data;
         if (obj) lv_obj_del(obj);
         lv_timer_del(t);
     }, 3000, flash);
