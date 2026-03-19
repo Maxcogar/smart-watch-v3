@@ -4,6 +4,8 @@
 
 #include "time_service.h"
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 static const char *_dayNames[] = {
     "Sunday", "Monday", "Tuesday", "Wednesday",
@@ -30,7 +32,7 @@ bool TimeService::syncNTP(void) {
     while (ti.tm_year < (2025 - 1900) && millis() - start < 5000) {
         time(&now);
         localtime_r(&now, &ti);
-        delay(100);
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     if (ti.tm_year >= (2025 - 1900)) {

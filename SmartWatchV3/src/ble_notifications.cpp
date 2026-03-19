@@ -53,7 +53,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
 
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-        std::string value = pCharacteristic->getValue().c_str();
+        std::string value = std::string(pCharacteristic->getValue().c_str());
 
         if (value.length() > 0) {
             Serial.println("Received notification via BLE:");
@@ -93,7 +93,7 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 // Task sync callback
 class TaskSyncCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-        std::string value = pCharacteristic->getValue().c_str();
+        std::string value = std::string(pCharacteristic->getValue().c_str());
         if (value.length() > 0) {
             Serial.println("Received task sync via BLE");
             onTaskSyncReceived(value.c_str(), value.length());
@@ -104,7 +104,7 @@ class TaskSyncCallbacks: public BLECharacteristicCallbacks {
 // Time sync callback
 class TimeSyncCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-        std::string value = pCharacteristic->getValue().c_str();
+        std::string value = std::string(pCharacteristic->getValue().c_str());
         if (value.length() > 0) {
             uint32_t epoch = strtoul(value.c_str(), NULL, 10);
             if (epoch > 1000000000UL) {  // sanity check
