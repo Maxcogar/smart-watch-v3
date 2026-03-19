@@ -23,11 +23,42 @@ static lv_obj_t *_batteryDetail = NULL;
 
 #define PANEL_WIDTH 200
 
+// Left-edge swipe tracking for dismiss (PRD AC 3.3.4)
+static bool _swipeTracking = false;
+static int16_t _swipeStartX = 0;
+static uint32_t _swipeStartTime = 0;
+
 static void _onOverlayTap(lv_event_t *e) {
     lv_obj_t *target = lv_event_get_target(e);
     // Only dismiss if tapping the overlay background, not the panel
     if (target == _overlay) {
         ControlPanel::hide();
+    }
+}
+
+static void _onOverlaySwipe(lv_event_t *e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_indev_t *indev = lv_indev_get_act();
+    if (!indev) return;
+
+    lv_point_t point;
+    lv_indev_get_point(indev, &point);
+
+    if (code == LV_EVENT_PRESSED) {
+        // Only track swipes starting from left edge (within 20px)
+        if (point.x < 20) {
+            _swipeTracking = true;
+            _swipeStartX = point.x;
+            _swipeStartTime = lv_tick_get();
+        }
+    } else if (code == LV_EVENT_RELEASED && _swipeTracking) {
+        _swipeTracking = false;
+        uint32_t elapsed = lv_tick_elaps(_swipeStartTime);
+        int16_t dx = point.x - _swipeStartX;
+        // Right swipe from left edge: dismiss (PRD AC 3.3.4)
+        if (dx > 40 && elapsed < 400) {
+            ControlPanel::hide();
+        }
     }
 }
 
@@ -46,12 +77,16 @@ static void _onWifiToggle(lv_event_t *e) {
         // Load WiFi creds from storage
         WatchSettings settings;
         if (StorageService::loadSettings(settings) && strlen(settings.wifiSSID) > 0) {
-            ConnectivityService::connectWiFi(settings.wifiSSID, settings.wifiPass);
+            if (ConnectivityService::connectWiFi(settings.wifiSSID, settings.wifiPass)) {
+                // Start alert server once WiFi is connected (FR9)
+                ConnectivityService::startAlertServer();
+            }
         } else {
             Serial.println("No WiFi credentials configured");
             lv_obj_clear_state(sw, LV_STATE_CHECKED);
         }
     } else {
+        ConnectivityService::stopAlertServer();
         ConnectivityService::disconnectWiFi();
     }
 }
@@ -102,10 +137,13 @@ void ControlPanel::show(void) {
     lv_obj_set_size(_overlay, SCREEN_WIDTH, SCREEN_HEIGHT);
     lv_obj_set_pos(_overlay, 0, 0);
     lv_obj_set_style_bg_color(_overlay, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(_overlay, LV_OPA_40, 0);
+    lv_obj_set_style_bg_opa(_overlay, LV_OPA_70, 0);  // PRD AC 3.3.2: 70% opacity
     lv_obj_add_flag(_overlay, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(_overlay, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(_overlay, _onOverlayTap, LV_EVENT_CLICKED, NULL);
+    // Left-edge swipe to dismiss (PRD AC 3.3.4)
+    lv_obj_add_event_cb(_overlay, _onOverlaySwipe, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(_overlay, _onOverlaySwipe, LV_EVENT_RELEASED, NULL);
 
     // Panel (right side)
     _panel = lv_obj_create(_overlay);

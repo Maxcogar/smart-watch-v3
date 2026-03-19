@@ -3,7 +3,7 @@
  *
  * Tracks touch press/release coordinates and timing to detect swipes.
  * Swipe: >40px movement, <400ms, dominant axis >2x minor axis.
- * Right-edge: startX > 280 for control panel trigger.
+ * Right-edge: startX > 300 (within 20px of right edge) for control panel trigger.
  */
 
 #include "gesture.h"

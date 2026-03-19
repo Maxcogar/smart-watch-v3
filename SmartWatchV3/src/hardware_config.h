@@ -50,7 +50,7 @@
 // ─── Battery monitoring (voltage divider on GPIO5) ─────────────────
 #define BATTERY_PIN            5
 #define CHARGE_PIN             -1
-#define BATTERY_DIVIDER_RATIO  2.00f
+#define BATTERY_DIVIDER_RATIO  3.00f   // matches OEM 06_lvgl_battery: voltage = 3.3/4096 * adc * 3
 #define BATTERY_MAX_VOLTAGE    4.20f
 #define BATTERY_MIN_VOLTAGE    3.00f
 
@@ -114,8 +114,7 @@ inline float readBatteryVoltage()
         accum += analogRead(BATTERY_PIN);
     }
     const float avg = static_cast<float>(accum) / samples;
-    // Example 06_lvgl_battery uses: voltage = 3.3 / 4096 * analogValue * 3
-    // We use the documented 2:1 divider ratio for this board variant.
+    // OEM example 06_lvgl_battery: voltage = 3.3 / 4096 * analogValue * 3
     const float voltage = (avg * 3.30f / 4095.0f) * BATTERY_DIVIDER_RATIO;
     return voltage;
 }

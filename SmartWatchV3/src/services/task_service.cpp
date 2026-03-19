@@ -93,6 +93,7 @@ void TaskService::syncFromJSON(const char *jsonPayload, size_t len) {
         if (_taskCount >= MAX_TASKS) break;
 
         Task &task = _tasks[_taskCount];
+        strlcpy(task.id, t["id"] | "", sizeof(task.id));
         strlcpy(task.title, t["title"] | "Untitled", sizeof(task.title));
         task.priority = t["priority"] | 3;
         task.durationMin = t["duration"] | 25;

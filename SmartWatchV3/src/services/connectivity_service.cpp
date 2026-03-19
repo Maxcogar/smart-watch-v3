@@ -19,6 +19,10 @@ void ConnectivityService::init(void) {
     WiFi.disconnect();
 }
 
+void ConnectivityService::setAlertCallback(void (*cb)(const char *message)) {
+    _alertCallback = cb;
+}
+
 bool ConnectivityService::connectWiFi(const char *ssid, const char *password) {
     Serial.printf("WiFi: connecting to %s...\n", ssid);
     WiFi.begin(ssid, password);
@@ -26,7 +30,7 @@ bool ConnectivityService::connectWiFi(const char *ssid, const char *password) {
     // Wait up to 10 seconds
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
-        delay(100);
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     if (WiFi.status() == WL_CONNECTED) {

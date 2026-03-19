@@ -18,6 +18,7 @@
 #include "../../services/notification_service.h"
 #include "../../services/power_service.h"
 #include "../../hardware_config.h"
+#include "../../ble_notifications.h"
 
 static lv_obj_t *_titleLabel = NULL;
 static lv_obj_t *_timerLabel = NULL;
@@ -82,7 +83,12 @@ static void _onStop(lv_event_t *e) {
 static void _onComplete(lv_event_t *e) {
     int8_t idx = TaskService::getActiveTaskIndex();
     if (idx >= 0) {
+        const Task *task = TaskService::getActiveTask();
         TaskService::completeTask(idx);
+        // Sync completion back to phone via BLE (FR3, Story 3.2)
+        if (task) {
+            sendTaskCompletion(task->id);
+        }
     }
     FocusService::stopTimer();
     PowerService::setFocusMode(false);
@@ -248,6 +254,10 @@ void ActiveTask::create(lv_obj_t *screen) {
     lv_obj_center(compLabel);
     lv_obj_add_event_cb(_completeBtn, _onComplete, LV_EVENT_CLICKED, NULL);
 
+    // Focus Shield activates when Active Task Screen is displayed (PRD AC 2.5.1)
+    NotificationService::setFocusShieldActive(true);
+    StatusBar::setFocusShield(true);
+
     // Timer update (every second)
     _updateTimer = lv_timer_create(_onTimerTick, 1000, NULL);
 
@@ -302,7 +312,9 @@ void ActiveTask::destroy(void) {
         lv_timer_del(_updateTimer);
         _updateTimer = NULL;
     }
-    // Reset Focus Shield indicator if leaving
+    // Deactivate Focus Shield on screen exit (PRD AC 2.5.6)
+    NotificationService::setFocusShieldActive(false);
+    PowerService::setFocusMode(false);
     StatusBar::setFocusShield(false);
     _titleLabel = NULL;
     _timerLabel = NULL;

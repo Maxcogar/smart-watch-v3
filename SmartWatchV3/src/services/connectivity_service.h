@@ -23,6 +23,7 @@ namespace ConnectivityService {
     bool sendCompressorCommand(const char *ip, bool state);
 
     // Priority Alert HTTP server
+    void setAlertCallback(void (*cb)(const char *message));
     void startAlertServer(uint16_t port = 8080);
     void stopAlertServer(void);
     void handleAlertServer(void);  // call in loop
