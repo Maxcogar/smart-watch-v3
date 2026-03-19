@@ -12,6 +12,7 @@
 #include "../../services/storage_service.h"
 #include "../../hardware_config.h"
 #include "../../ble_notifications.h"
+#include "../../services/power_service.h"
 
 static lv_obj_t *_overlay = NULL;
 static lv_obj_t *_panel = NULL;
@@ -142,7 +143,9 @@ void ControlPanel::show(void) {
     _brightnessSlider = lv_slider_create(brightRow);
     lv_obj_set_width(_brightnessSlider, 80);
     lv_slider_set_range(_brightnessSlider, 10, 100);
-    lv_slider_set_value(_brightnessSlider, 80, LV_ANIM_OFF);
+    // Read actual brightness (0-255) and map to 0-100 for slider
+    lv_slider_set_value(_brightnessSlider,
+        (int32_t)PowerService::getCurrentBrightness() * 100 / 255, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(_brightnessSlider, COLOR_DIVIDER, LV_PART_MAIN);
     lv_obj_set_style_bg_color(_brightnessSlider, COLOR_ACCENT, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(_brightnessSlider, COLOR_ACCENT, LV_PART_KNOB);

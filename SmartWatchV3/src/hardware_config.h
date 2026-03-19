@@ -20,6 +20,8 @@
 
 #include <Arduino.h>
 #include <esp_sleep.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // ─── Display (ST7789 over SPI) ──────────────────────────────────────
 #define TFT_WIDTH    240
@@ -50,7 +52,7 @@
 // ─── Battery monitoring (voltage divider on GPIO5) ─────────────────
 #define BATTERY_PIN            5
 #define CHARGE_PIN             -1
-#define BATTERY_DIVIDER_RATIO  2.00f
+#define BATTERY_DIVIDER_RATIO  3.00f
 #define BATTERY_MAX_VOLTAGE    4.20f
 #define BATTERY_MIN_VOLTAGE    3.00f
 
@@ -134,7 +136,11 @@ inline bool isCharging()
     if (CHARGE_PIN < 0) {
         return false;
     }
-    pinMode(CHARGE_PIN, INPUT_PULLUP);
+    static bool pinConfigured = false;
+    if (!pinConfigured) {
+        pinMode(CHARGE_PIN, INPUT_PULLUP);
+        pinConfigured = true;
+    }
     return digitalRead(CHARGE_PIN) == LOW;
 }
 
@@ -189,7 +195,7 @@ inline void vibrateMotor(uint16_t duration_ms)
     }
     pinMode(MOTOR_PIN, OUTPUT);
     digitalWrite(MOTOR_PIN, HIGH);
-    delay(duration_ms);
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
     digitalWrite(MOTOR_PIN, LOW);
 }
 

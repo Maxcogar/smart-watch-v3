@@ -7,6 +7,8 @@
 #include <HTTPClient.h>
 #include <WebServer.h>
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 static WebServer *_alertServer = NULL;
 static bool _serverRunning = false;
@@ -26,7 +28,7 @@ bool ConnectivityService::connectWiFi(const char *ssid, const char *password) {
     // Wait up to 10 seconds
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
-        delay(100);
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     if (WiFi.status() == WL_CONNECTED) {

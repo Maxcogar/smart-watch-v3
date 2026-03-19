@@ -11,11 +11,11 @@
  */
 
 #include "watch_face.h"
-#include <ctime>
 #include "../theme.h"
 #include "../gesture.h"
 #include "../screen_manager.h"
 #include "../widgets/status_bar.h"
+#include "../../services/time_service.h"
 #include "control_panel.h"
 
 static lv_obj_t *_timeLabel = NULL;
@@ -26,32 +26,20 @@ static lv_obj_t *_taskTitle = NULL;
 static lv_obj_t *_timerStatus = NULL;
 static lv_timer_t *_clockTimer = NULL;
 
-static const char *_dayNames[] = {
-    "Sunday", "Monday", "Tuesday", "Wednesday",
-    "Thursday", "Friday", "Saturday"
-};
-static const char *_monthNames[] = {
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
-
 static void _updateClock(lv_timer_t *t) {
     if (!_timeLabel || !_dateLabel) return;
 
-    time_t now;
-    struct tm ti;
-    time(&now);
-    localtime_r(&now, &ti);
+    // Use TimeService to avoid duplicating day/month name arrays
+    char timeBuf[8];
+    char dateBuf[32];
+    TimeService::getFormattedTime(timeBuf, sizeof(timeBuf));
+    TimeService::getFormattedDate(dateBuf, sizeof(dateBuf));
 
-    // Time — HH:MM
-    lv_label_set_text_fmt(_timeLabel, "%02d:%02d", ti.tm_hour, ti.tm_min);
-
-    // Date — "Wednesday, Mar 17"
-    lv_label_set_text_fmt(_dateLabel, "%s, %s %d",
-        _dayNames[ti.tm_wday], _monthNames[ti.tm_mon], ti.tm_mday);
+    lv_label_set_text(_timeLabel, timeBuf);
+    lv_label_set_text(_dateLabel, dateBuf);
 
     // Also update status bar time
-    StatusBar::setTime(ti.tm_hour, ti.tm_min);
+    StatusBar::setTime(TimeService::getHour(), TimeService::getMinute());
 }
 
 static void _onTaskCardTap(lv_event_t *e) {

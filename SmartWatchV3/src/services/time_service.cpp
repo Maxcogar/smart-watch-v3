@@ -27,13 +27,13 @@ bool TimeService::syncNTP(void) {
     time_t now = 0;
     struct tm ti = {};
     unsigned long start = millis();
-    while (ti.tm_year < (2024 - 1900) && millis() - start < 5000) {
+    while (ti.tm_year < (2025 - 1900) && millis() - start < 5000) {
         time(&now);
         localtime_r(&now, &ti);
         delay(100);
     }
 
-    if (ti.tm_year >= (2024 - 1900)) {
+    if (ti.tm_year >= (2025 - 1900)) {
         Serial.printf("NTP: synced to %04d-%02d-%02d %02d:%02d:%02d\n",
             ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday,
             ti.tm_hour, ti.tm_min, ti.tm_sec);
