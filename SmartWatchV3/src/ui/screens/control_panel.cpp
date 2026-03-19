@@ -11,6 +11,7 @@
 #include "../../services/connectivity_service.h"
 #include "../../services/storage_service.h"
 #include "../../hardware_config.h"
+#include "../../ble_notifications.h"
 
 static lv_obj_t *_overlay = NULL;
 static lv_obj_t *_panel = NULL;
@@ -46,12 +47,18 @@ static void _onWifiToggle(lv_event_t *e) {
         // Load WiFi creds from storage
         WatchSettings settings;
         if (StorageService::loadSettings(settings) && strlen(settings.wifiSSID) > 0) {
-            ConnectivityService::connectWiFi(settings.wifiSSID, settings.wifiPass);
+            if (ConnectivityService::connectWiFi(settings.wifiSSID, settings.wifiPass)) {
+                // Start the HTTP alert server now that WiFi is up
+                ConnectivityService::startAlertServer();
+            } else {
+                lv_obj_clear_state(sw, LV_STATE_CHECKED);
+            }
         } else {
             Serial.println("No WiFi credentials configured");
             lv_obj_clear_state(sw, LV_STATE_CHECKED);
         }
     } else {
+        ConnectivityService::stopAlertServer();
         ConnectivityService::disconnectWiFi();
     }
 }
@@ -163,10 +170,12 @@ void ControlPanel::show(void) {
     lv_obj_add_style(_batteryDetail, &style_label_caption, 0);
     lv_label_set_text_fmt(_batteryDetail, LV_SYMBOL_CHARGE " Battery: %d%%", getBatteryPercentage());
 
-    // BLE status
+    // BLE status (read actual connection state)
     lv_obj_t *bleLabel = lv_label_create(_panel);
     lv_obj_add_style(bleLabel, &style_label_caption, 0);
-    lv_label_set_text(bleLabel, LV_SYMBOL_BLUETOOTH " BLE: Connected");
+    lv_label_set_text(bleLabel, isBLEConnected()
+        ? LV_SYMBOL_BLUETOOTH " BLE: Connected"
+        : LV_SYMBOL_BLUETOOTH " BLE: Disconnected");
 
     // Slide-in animation
     lv_anim_t a;

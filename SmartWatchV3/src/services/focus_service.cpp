@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 static FocusState _state = FOCUS_IDLE;
-static uint32_t _totalDurationUs = 0;     // total in microseconds
+static int64_t _totalDurationUs = 0;      // total in microseconds (int64 to support >71 min)
 static int64_t _startTimeUs = 0;          // when timer started (absolute)
 static int64_t _pausedElapsedUs = 0;      // elapsed before pause
 
@@ -23,7 +23,7 @@ void FocusService::init(void) {
 }
 
 void FocusService::startTimer(uint16_t minutes) {
-    _totalDurationUs = (uint32_t)minutes * 60UL * 1000000UL;
+    _totalDurationUs = (int64_t)minutes * 60LL * 1000000LL;
     _startTimeUs = esp_timer_get_time();
     _pausedElapsedUs = 0;
     _state = FOCUS_ACTIVE;
@@ -67,7 +67,7 @@ uint32_t FocusService::getRemainingSeconds(void) {
         elapsedUs = _pausedElapsedUs + (esp_timer_get_time() - _startTimeUs);
     }
 
-    if (elapsedUs >= (int64_t)_totalDurationUs) return 0;
+    if (elapsedUs >= _totalDurationUs) return 0;
 
     return (uint32_t)((_totalDurationUs - elapsedUs) / 1000000UL);
 }
@@ -99,7 +99,7 @@ void FocusService::update(void) {
     if (_state != FOCUS_ACTIVE) return;
 
     int64_t elapsedUs = _pausedElapsedUs + (esp_timer_get_time() - _startTimeUs);
-    if (elapsedUs >= (int64_t)_totalDurationUs) {
+    if (elapsedUs >= _totalDurationUs) {
         _state = FOCUS_COMPLETE;
         Serial.println("Focus: timer complete!");
     }

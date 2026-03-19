@@ -71,15 +71,9 @@ static void _onCardSwipe(lv_event_t *e) {
             });
             lv_anim_start(&a);
 
-            // Dismiss after animation
+            // Dismiss and rebuild immediately to prevent stale indices
             NotificationService::dismiss(state->notifIndex);
-
-            // Rebuild list after short delay
-            lv_timer_t *rebuild = lv_timer_create([](lv_timer_t *t) {
-                _buildList();
-                lv_timer_del(t);
-            }, 200, NULL);
-            (void)rebuild;
+            _buildList();
         } else {
             // Snap back
             lv_anim_t a;
