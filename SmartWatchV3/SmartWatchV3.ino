@@ -82,7 +82,7 @@ Arduino_DataBus *bus = new Arduino_ESP32SPI(
     PIN_LCD_DC, PIN_LCD_CS, PIN_LCD_SCLK, PIN_LCD_MOSI, PIN_LCD_MISO);
 
 Arduino_GFX *gfx = new Arduino_ST7789(
-    bus, PIN_LCD_RST, LCD_ROTATION, true /* IPS */, LCD_H_RES, LCD_V_RES);
+    bus, PIN_LCD_RST, LCD_ROTATION, true /* IPS */);
 
 // --- FreeRTOS Handles ---
 TaskHandle_t bleTaskHandle = NULL;
