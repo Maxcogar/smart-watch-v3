@@ -81,8 +81,11 @@
 Arduino_DataBus *bus = new Arduino_ESP32SPI(
     PIN_LCD_DC, PIN_LCD_CS, PIN_LCD_SCLK, PIN_LCD_MOSI, PIN_LCD_MISO);
 
+// Native panel is 240x320 portrait; rotation=1 rotates to 320x240 landscape.
+// Width/height here are the NATIVE (pre-rotation) dimensions,
+// matching manufacturer example 07_lvgl_brightness exactly.
 Arduino_GFX *gfx = new Arduino_ST7789(
-    bus, PIN_LCD_RST, LCD_ROTATION, true /* IPS */, LCD_H_RES, LCD_V_RES);
+    bus, PIN_LCD_RST, LCD_ROTATION, true /* IPS */, 240, 320);
 
 // --- FreeRTOS Handles ---
 TaskHandle_t bleTaskHandle = NULL;
@@ -170,6 +173,9 @@ void setup() {
 void loop() {
     // Power management (runs every iteration)
     PowerService::update();
+
+    // Service HTTP alert server (if running)
+    ConnectivityService::handleAlertServer();
 
     static unsigned long lastUpdate = 0;
     if (millis() - lastUpdate > 5000) {
