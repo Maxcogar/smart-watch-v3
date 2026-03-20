@@ -39,10 +39,12 @@
 #define PIN_TP_SDA    48
 #define PIN_TP_SCL    47
 
-// --- Display Configuration: Landscape 320x240 ---
+// --- Display Configuration ---
+// Native ST7789 panel is 240x320. Rotation=1 gives landscape 320x240.
+// All OEM examples pass native (240, 320) to the constructor.
 #define LCD_ROTATION  1
-#define LCD_H_RES     320
-#define LCD_V_RES     240
+#define LCD_H_RES     240   // native panel width
+#define LCD_V_RES     320   // native panel height
 
 // --- Backlight PWM ---
 #define BL_FREQ       5000
@@ -51,6 +53,7 @@
 #define LV_CONF_INCLUDE_SIMPLE
 
 #include <Arduino.h>
+#include <time.h>
 #include <lvgl.h>
 #include "src/lvgl_port_v8.h"
 #include "src/ble_notifications.h"
@@ -129,6 +132,19 @@ void setup() {
     FocusService::init();
     NotificationService::init();
     ConnectivityService::init();
+    // Register alert callback: enqueues priority alert to notification queue (FR9)
+    ConnectivityService::setAlertCallback([](const char *message) {
+        if (notificationQueue != NULL) {
+            NotificationData notif = {};
+            strlcpy(notif.title, "PRIORITY ALERT", sizeof(notif.title));
+            strlcpy(notif.message, message ? message : "", sizeof(notif.message));
+            strlcpy(notif.app, "Alert", sizeof(notif.app));
+            notif.category = 4;  // priority/alarm
+            notif.timestamp = (uint32_t)time(NULL);
+            notif.isRead = false;
+            xQueueSend(notificationQueue, &notif, 0);
+        }
+    });
     TimeService::init();
     PowerService::init();
 
@@ -170,6 +186,9 @@ void setup() {
 void loop() {
     // Power management (runs every iteration)
     PowerService::update();
+
+    // Service priority alert HTTP server (FR9)
+    ConnectivityService::handleAlertServer();
 
     static unsigned long lastUpdate = 0;
     if (millis() - lastUpdate > 5000) {

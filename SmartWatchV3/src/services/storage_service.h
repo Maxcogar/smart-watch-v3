@@ -12,6 +12,7 @@
 
 // Task data structure
 struct Task {
+    char id[32];            // unique id for sync with Microsoft ToDo
     char title[48];
     uint8_t priority;       // 1=high, 2=medium, 3=low
     uint16_t durationMin;   // estimated focus time in minutes

@@ -74,11 +74,31 @@ static void _onCardSwipe(lv_event_t *e) {
             // Dismiss after animation
             NotificationService::dismiss(state->notifIndex);
 
-            // Rebuild list after short delay
+            // Rebuild list after animation, then auto-advance (PRD AC 3.1.6)
+            uint8_t *nextIdx = (uint8_t *)lv_mem_alloc(sizeof(uint8_t));
+            *nextIdx = state->notifIndex;
             lv_timer_t *rebuild = lv_timer_create([](lv_timer_t *t) {
                 _buildList();
+                // Auto-advance: scroll to next card after 1 second (PRD AC 3.1.6)
+                uint8_t *idx = (uint8_t *)t->user_data;
+                uint8_t targetIdx = *idx;
+                lv_mem_free(idx);
+
+                if (_listContainer) {
+                    uint32_t childCount = lv_obj_get_child_cnt(_listContainer);
+                    if (childCount > 0 && targetIdx < childCount) {
+                        lv_timer_create([](lv_timer_t *t2) {
+                            lv_obj_t *container = (lv_obj_t *)t2->user_data;
+                            // Scroll to ensure next card is visible
+                            if (container && lv_obj_get_child_cnt(container) > 0) {
+                                lv_obj_scroll_to_y(container, 0, LV_ANIM_ON);
+                            }
+                            lv_timer_del(t2);
+                        }, 1000, _listContainer);
+                    }
+                }
                 lv_timer_del(t);
-            }, 200, NULL);
+            }, 200, nextIdx);
             (void)rebuild;
         } else {
             // Snap back
