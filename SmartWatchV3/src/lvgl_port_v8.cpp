@@ -58,14 +58,17 @@ void lvgl_port_init(void *lcd, void *touch) {
 
     screenWidth  = gfx->width();
     screenHeight = gfx->height();
-    bufSize      = screenWidth * screenHeight;   // full-screen buffer
 
-    // ---- Buffer allocation — identical to examples ----
+    // Use a partial buffer (1/10 screen) — full-screen buffer is too large
+    // for internal RAM on ESP32-S3. Partial mode works perfectly with LVGL;
+    // it just redraws in bands instead of one full blit.
+    bufSize = screenWidth * (screenHeight / 10);  // ~32 rows at a time
+
     // Try internal RAM first, fall back to any available (may hit PSRAM)
     disp_draw_buf = (lv_color_t *)heap_caps_malloc(
         bufSize * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!disp_draw_buf) {
-        Serial.println("Internal RAM insufficient, falling back...");
+        Serial.println("Internal RAM insufficient, falling back to PSRAM...");
         disp_draw_buf = (lv_color_t *)heap_caps_malloc(
             bufSize * sizeof(lv_color_t), MALLOC_CAP_8BIT);
     }
@@ -78,16 +81,15 @@ void lvgl_port_init(void *lcd, void *touch) {
     Serial.printf("LVGL buffer allocated: %u pixels (%u bytes)\n",
                   bufSize, (unsigned)(bufSize * sizeof(lv_color_t)));
 
-    // Single buffer, NULL for second — matches examples exactly
     lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, bufSize);
 
-    // ---- Display driver — matches examples ----
+    // ---- Display driver ----
     lv_disp_drv_init(&disp_drv);
     disp_drv.hor_res     = screenWidth;
     disp_drv.ver_res     = screenHeight;
     disp_drv.flush_cb    = lvgl_flush_cb;
     disp_drv.draw_buf    = &draw_buf;
-    disp_drv.direct_mode = true;           // <-- critical, matches examples
+    disp_drv.direct_mode = false;          // partial buffer — cannot use direct_mode
     lv_disp_drv_register(&disp_drv);
 
     // ---- Touch input driver — identical to examples ----
@@ -164,13 +166,14 @@ static void lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t
         return;
     }
 
-    // Full-screen blit — matches examples' direct_mode pattern.
-    // The LV_COLOR_16_SWAP check selects the correct byte-order draw function,
-    // exactly as every working example does.
+    uint32_t w = (area->x2 - area->x1 + 1);
+    uint32_t h = (area->y2 - area->y1 + 1);
+
+    // Draw only the dirty area — works with partial buffer mode
 #if (LV_COLOR_16_SWAP != 0)
-    gfx->draw16bitBeRGBBitmap(0, 0, (uint16_t *)disp_draw_buf, screenWidth, screenHeight);
+    gfx->draw16bitBeRGBBitmap(area->x1, area->y1, (uint16_t *)color_p, w, h);
 #else
-    gfx->draw16bitRGBBitmap(0, 0, (uint16_t *)disp_draw_buf, screenWidth, screenHeight);
+    gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)color_p, w, h);
 #endif
 
     lv_disp_flush_ready(disp);
