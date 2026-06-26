@@ -1,14 +1,15 @@
 /**
  * LVGL Porting Layer Implementation
  *
- * This follows the EXACT rendering pattern from the manufacturer's working
- * examples (05_lvgl_qmi8658, 09_lvgl_camera):
+ * Framebuffer strategy matches the factory BSP (examples/01_factory/
+ * bsp_lv_port.cpp): two FULL-SCREEN draw buffers allocated in PSRAM via
+ * MALLOC_CAP_SPIRAM. The board has 8MB PSRAM precisely so the framebuffers
+ * do not compete with internal RAM. If PSRAM is unavailable at runtime we
+ * fall back to a single 1/10-screen partial buffer in internal RAM so the
+ * display still comes up.
  *
- *   - Full-screen framebuffer (240 * 320 pixels)
- *   - direct_mode = true
- *   - Single draw buffer (no double-buffering)
- *   - Buffer allocation: try INTERNAL|8BIT first, fall back to 8BIT
- *   - Flush callback does the full-screen draw with the correct
+ *   - Two full-screen buffers in PSRAM (factory pattern), or partial fallback
+ *   - Flush callback draws the dirty area with the correct
  *     draw16bitRGBBitmap / draw16bitBeRGBBitmap depending on LV_COLOR_16_SWAP
  *   - Touch read via bsp_cst816, identical to examples
  *
@@ -28,7 +29,8 @@
 static lv_disp_draw_buf_t draw_buf;
 static lv_disp_drv_t      disp_drv;
 static lv_indev_drv_t     indev_drv;
-static lv_color_t        *disp_draw_buf = NULL;
+static lv_color_t        *disp_draw_buf  = NULL;
+static lv_color_t        *disp_draw_buf2 = NULL;
 
 static SemaphoreHandle_t  lvgl_mutex      = NULL;
 static TaskHandle_t       lvgl_task_handle = NULL;
@@ -58,28 +60,34 @@ void lvgl_port_init(void *lcd, void *touch) {
 
     screenWidth  = gfx->width();
     screenHeight = gfx->height();
-    // Use a partial buffer (1/10 screen) — full-screen buffer (150KB) exceeds
-    // available internal RAM on ESP32-S3, causing allocation failure and crash.
-    bufSize = screenWidth * (screenHeight / 10);  // ~32 rows at a time
 
-    // Try internal RAM first, fall back to any available (may hit PSRAM)
+    // Factory pattern: two full-screen buffers in PSRAM (8MB available).
+    // See examples/01_factory/bsp_lv_port.cpp.
+    bufSize = screenWidth * screenHeight;
     disp_draw_buf = (lv_color_t *)heap_caps_malloc(
-        bufSize * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    if (!disp_draw_buf) {
-        Serial.println("Internal RAM insufficient, falling back to PSRAM...");
+        bufSize * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+    disp_draw_buf2 = (lv_color_t *)heap_caps_malloc(
+        bufSize * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+
+    if (disp_draw_buf && disp_draw_buf2) {
+        Serial.printf("LVGL: 2x full-screen buffers in PSRAM (%u px, %u bytes total)\n",
+                      bufSize, (unsigned)(bufSize * sizeof(lv_color_t) * 2));
+        lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, disp_draw_buf2, bufSize);
+    } else {
+        // PSRAM unavailable — fall back to a single 1/10-screen partial
+        // buffer in internal RAM so the display still initializes.
+        if (disp_draw_buf)  { heap_caps_free(disp_draw_buf);  disp_draw_buf  = NULL; }
+        if (disp_draw_buf2) { heap_caps_free(disp_draw_buf2); disp_draw_buf2 = NULL; }
+        bufSize = screenWidth * (screenHeight / 10);
         disp_draw_buf = (lv_color_t *)heap_caps_malloc(
-            bufSize * sizeof(lv_color_t), MALLOC_CAP_8BIT);
+            bufSize * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        if (!disp_draw_buf) {
+            Serial.println("ERROR: LVGL disp_draw_buf allocate failed!");
+            return;
+        }
+        Serial.printf("LVGL: PSRAM unavailable, partial internal buffer (%u px)\n", bufSize);
+        lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, bufSize);
     }
-
-    if (!disp_draw_buf) {
-        Serial.println("ERROR: LVGL disp_draw_buf allocate failed!");
-        return;
-    }
-
-    Serial.printf("LVGL buffer allocated: %u pixels (%u bytes)\n",
-                  bufSize, (unsigned)(bufSize * sizeof(lv_color_t)));
-
-    lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, bufSize);
 
     // ---- Display driver ----
     lv_disp_drv_init(&disp_drv);

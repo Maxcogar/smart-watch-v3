@@ -24,7 +24,7 @@
 // ─── Display (ST7789 over SPI) ──────────────────────────────────────
 #define TFT_WIDTH    240
 #define TFT_HEIGHT   320
-#define TFT_SPI_HOST HSPI
+#define TFT_SPI_HOST FSPI   // factory BSP uses FSPI (bsp_spi.cpp / bsp_lv_port.cpp)
 #define TFT_MOSI     38
 #define TFT_SCLK     39
 #define TFT_MISO     40
@@ -115,7 +115,7 @@ inline float readBatteryVoltage()
     }
     const float avg = static_cast<float>(accum) / samples;
     // OEM example 06_lvgl_battery: voltage = 3.3 / 4096 * analogValue * 3
-    const float voltage = (avg * 3.30f / 4095.0f) * BATTERY_DIVIDER_RATIO;
+    const float voltage = (avg * 3.30f / 4096.0f) * BATTERY_DIVIDER_RATIO;
     return voltage;
 }
 
