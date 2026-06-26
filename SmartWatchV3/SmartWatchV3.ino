@@ -113,7 +113,7 @@ void setup() {
         Serial.println("ERROR: gfx->begin() failed!");
         while (1) delay(100);
     }
-    gfx->fillScreen(BLACK);
+    gfx->fillScreen(RGB565_BLACK);  // Arduino_GFX >=1.5 renamed BLACK -> RGB565_BLACK
 
     // Backlight at 80%
     ledcAttach(PIN_LCD_BL, BL_FREQ, BL_RESOLUTION);

@@ -31,17 +31,49 @@
 The hardware bring-up is faithful to the OEM. The findings below are the few
 places the code diverged from the OEM reference, plus the fixes applied.
 
+## Verified build
+
+The firmware now **compiles clean** against the OEM toolchain
+(arduino-cli, esp32 core 3.3.10, Arduino_GFX 1.6.6, lvgl 8.3.11) using the
+pinned profile in `SmartWatchV3/sketch.yaml`:
+
+```
+Sketch uses 1755726 bytes (55%) of program storage space. Maximum is 3145728.
+Global variables use 167712 bytes (51%) of dynamic memory, leaving 159968 bytes.
+```
+
+That ~160 KB free is the whole story (see finding 1).
+
 ## Findings & fixes applied
 
-### 1. Framebuffer was NOT done the OEM way — FIXED (high impact)
-The OEM factory BSP (`examples/01_factory/bsp_lv_port.cpp`) allocates **two
-full-screen LVGL buffers in PSRAM** (`MALLOC_CAP_SPIRAM`). The board carries
-8MB PSRAM specifically for this. The project had instead been changed to a
-**1/10-screen partial buffer in internal RAM**, under the mistaken assumption
-that a full framebuffer "won't fit" — it fits trivially in PSRAM.
-**Fix:** `lvgl_port_v8.cpp` now allocates two full-screen buffers from
-`MALLOC_CAP_SPIRAM` (factory pattern), with a graceful fall-back to the partial
-internal buffer only if PSRAM is genuinely unavailable.
+### 1. ROOT CAUSE of the blank screen: PSRAM was never enabled in the build — FIXED
+The factory BSP (`examples/01_factory/bsp_lv_port.cpp`) allocates **two
+full-screen LVGL buffers in PSRAM** (`MALLOC_CAP_SPIRAM`); the board has 8MB
+PSRAM precisely for this. Two 150 KB framebuffers cannot fit in the ~160 KB of
+internal RAM left after globals — so if PSRAM is off, the allocation returns
+NULL and the device crashes/blanks. The earlier "fix" (commit `1c57842`)
+papered over this by shrinking to a 1/10-screen partial internal buffer.
+
+The real cause is the **build configuration**: the ESP32-S3 board options
+default to `PSRAM=disabled` + `FlashSize=4M`, and the arduino-cli command
+documented in `COMMON_PROBLEMS_AND_FIXES.md` omitted both. So PSRAM was never
+available at runtime regardless of the code.
+
+**Fixes:**
+- Added `SmartWatchV3/sketch.yaml` — a pinned arduino-cli profile that forces
+  `PSRAM=opi`, `FlashSize=16M`, `PartitionScheme=huge_app`, plus the right
+  CDC/USB/CPU options. Build is now reproducible and can't silently drop PSRAM.
+- `lvgl_port_v8.cpp` now allocates two full-screen buffers from
+  `MALLOC_CAP_SPIRAM` (factory pattern), falling back to the partial internal
+  buffer only if PSRAM is genuinely unavailable.
+
+### 1b. Clean checkout did not build — FIXED
+- The CST816 driver was in `SmartWatchV3/lib/bsp_cst816/` (a PlatformIO
+  convention). arduino-cli/Arduino IDE do not compile a sketch `lib/` folder,
+  so `#include "bsp_cst816.h"` failed on a clean build. Moved the driver to the
+  sketch root so it compiles and resolves everywhere.
+- `gfx->fillScreen(BLACK)` failed against Arduino_GFX ≥1.5, which renamed the
+  color macros. Changed to `RGB565_BLACK`.
 
 ### 2. `TFT_SPI_HOST` set to HSPI — FIXED (low)
 Factory uses **FSPI** (`SPIClass bsp_spi(FSPI)`, `Arduino_ESP32SPI(..., FSPI)`).

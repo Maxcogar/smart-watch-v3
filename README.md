@@ -1,251 +1,133 @@
-# ESP32-S3 SmartWatch Project v3.0
+# ESP32-S3 ADHD-Friendly SmartWatch (v3)
 
-A modern smartwatch implementation using ESP32-S3-Touch-LCD-2 development board with esp-brookesia UI framework for smartphone-style interface and BLE notifications.
+Firmware for the **Waveshare ESP32-S3-Touch-LCD-2**. Built directly on
+**Arduino + Arduino_GFX + LVGL 8.3.11**, following the manufacturer's own
+reference examples (`examples/01_factory`, `06_lvgl_battery`,
+`07_lvgl_brightness`, `04_qmi8658_output`). There is **no** esp-brookesia /
+ESP32_Display_Panel layer — that was removed (see
+`docs/COMMON_PROBLEMS_AND_FIXES.md` §2); the UI is plain LVGL.
 
-## Features
+> ⚠️ **Critical build setting:** this board uses **OPI PSRAM**, and the LVGL
+> framebuffers are allocated there. If you build without `PSRAM=opi` the
+> display will be blank / crash on boot. Use the pinned profile below
+> (`arduino-cli compile -p esp32s3 ...`) or set **PSRAM: "OPI PSRAM"** in the
+> Arduino IDE — do not rely on the default board options.
 
-- 📱 **Modern UI**: Smartphone-style interface using esp-brookesia library
-- 🔔 **Phone Notifications**: Receive notifications via Bluetooth LE
-- ⌚ **Watch Face**: Digital clock with date and battery display
-- 📊 **Health Tracking**: Step counter using IMU sensor
-- ⚙️ **Settings**: Brightness control and system configuration
-- 🔋 **Power Management**: Optimized for battery operation
-- 📡 **Wireless**: BLE connectivity for iOS and Android
+## Hardware
 
-## Hardware Requirements
+| Item | Detail |
+|------|--------|
+| Board | Waveshare ESP32-S3-Touch-LCD-2 |
+| MCU | ESP32-S3 (dual LX7 @ 240 MHz) |
+| RAM | 512 KB SRAM + **8 MB OPI PSRAM** |
+| Flash | **16 MB** |
+| Display | 2.0″ IPS 240×320, **ST7789T3**, SPI |
+| Touch | **CST816** capacitive, I²C @ `0x15` |
+| IMU | **QMI8658** 6-axis, I²C @ `0x6B` (shares the touch I²C bus) |
+| Battery | 3.7 V Li-Po, ADC on GPIO5 |
 
-### Development Board
-- **ESP32-S3-Touch-LCD-2** (or compatible)
-  - ESP32-S3 microcontroller
-  - 240x320 IPS touchscreen display
-  - 16MB Flash + 8MB PSRAM
-  - QMI8658 6-axis IMU
-  - Battery management circuit
-  - USB-C for programming
+### Pin map (from the factory BSP — `examples/01_factory`)
 
-### Additional Components (Optional)
-- Li-Po battery (3.7V, 500-1000mAh)
-- Vibration motor for haptic feedback
-- Watch strap/case for wearable design
+| Signal | GPIO | | Signal | GPIO |
+|--------|------|---|--------|------|
+| LCD SCLK | 39 | | LCD MOSI | 38 |
+| LCD MISO | 40 | | LCD DC | 42 |
+| LCD CS | 45 | | LCD RST | -1 |
+| LCD backlight | 1 | | Touch/IMU SDA | 48 |
+| Touch/IMU SCL | 47 | | Battery ADC | 5 |
 
-## Software Requirements
+Pin/peripheral definitions live in `SmartWatchV3/src/hardware_config.h`.
 
-### Arduino IDE Setup
+## Software requirements
 
-1. **Install Arduino IDE** (v2.0 or later)
-   - Download from: https://www.arduino.cc/en/software
+- ESP32 Arduino core **3.x** (`esp32:esp32`)
+- Libraries: **lvgl 8.3.11**, **GFX Library for Arduino** (Arduino_GFX),
+  **ArduinoJson 7.x**. BLE / WiFi / HTTPClient / WebServer ship with the core.
+- `bsp_cst816` (the CST816 touch driver) is **vendored** in
+  `SmartWatchV3/lib/bsp_cst816/` — no separate install.
 
-2. **Add ESP32 Board Support**
-   - Open Arduino IDE
-   - Go to File → Preferences
-   - Add to "Additional Board Manager URLs":
-     ```
-     https://espressif.github.io/arduino-esp32/package_esp32_index.json
-     ```
-   - Go to Tools → Board → Board Manager
-   - Search for "esp32" and install "esp32 by Espressif Systems"
+## Building
 
-3. **Install Required Libraries** via Library Manager:
-   - **esp-brookesia** (v0.4.2+) - Modern UI framework
-   - **ESP32_Display_Panel** (v0.2.0+) - Display hardware abstraction
-   - **ESP32_IO_Expander** (v0.1.0+) - I/O expansion support
-   - **lvgl** (v8.3.11) - Graphics library
-   - **ArduinoJson** - JSON parsing for notifications
+### Option A — arduino-cli with the pinned profile (recommended)
 
-4. **Optional Libraries for Enhanced Features**:
-   - **ESP32 BLE ANCS Notifications** - iOS notification support
-   - **FastIMU** - Advanced IMU features
+A reproducible build profile is committed in `SmartWatchV3/sketch.yaml`. It
+pins the FQBN board options (including `PSRAM=opi`, `FlashSize=16M`, huge-app
+partition) so you can't accidentally build without PSRAM:
 
-### Board Configuration
+```bash
+cd SmartWatchV3
+arduino-cli compile -p esp32s3              # uses sketch.yaml profile
+arduino-cli upload  -p /dev/ttyACM0 -b esp32s3   # add --port for your OS
+```
 
-In Arduino IDE, select the following settings:
+First time only, install the toolchain the profile references:
 
-- **Board**: "ESP32S3 Dev Module"
-- **USB CDC On Boot**: "Enabled"
-- **CPU Frequency**: "240MHz (WiFi)"
-- **Flash Mode**: "QIO 80MHz"
-- **Flash Size**: "16MB (128Mb)"
-- **Partition Scheme**: "Huge APP (3MB No OTA/1MB SPIFFS)"
-- **Core Debug Level**: "None"
-- **PSRAM**: "OPI PSRAM"
-- **Arduino Runs On**: "Core 1"
-- **Events Run On**: "Core 1"
-- **Upload Speed**: "921600"
-- **USB Mode**: "Hardware CDC and JTAG"
+```bash
+arduino-cli core update-index \
+  --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli core install esp32:esp32
+arduino-cli lib install "GFX Library for Arduino" "lvgl@8.3.11" ArduinoJson
+```
 
-## Project Structure
+### Option B — Arduino IDE
+
+Board: **ESP32S3 Dev Module**, with these **Tools** settings:
+
+| Setting | Value |
+|---------|-------|
+| PSRAM | **OPI PSRAM** |
+| Flash Size | 16MB (128Mb) |
+| Partition Scheme | Huge APP (3MB No OTA/1MB SPIFFS) |
+| USB CDC On Boot | Enabled |
+| CPU Frequency | 240MHz (WiFi) |
+| Flash Mode | QIO 80MHz |
+| Upload Speed | 921600 |
+| USB Mode | Hardware CDC and JTAG |
+
+The LVGL config (`SmartWatchV3/lv_conf.h`) is committed with the sketch — do
+**not** copy a template `lv_conf.h` into your libraries folder.
+
+## Project layout
 
 ```
 SmartWatchV3/
-├── SmartWatchV3.ino        # Main Arduino sketch
-├── src/
-│   ├── hardware_config.h   # Hardware pin definitions
-│   ├── ble_notifications.h # BLE notification handling
-│   ├── watch_apps.h        # Watch applications
-│   ├── lvgl_port_v8.h      # LVGL configuration
-│   └── lvgl_port_v8.cpp    # LVGL implementation
-├── docs/
-│   └── BUILD_GUIDE.md      # Detailed build instructions
-└── README.md               # This file
+├── SmartWatchV3.ino          # display/touch/LVGL bring-up, BLE task, service + screen init
+├── sketch.yaml               # pinned arduino-cli build profile (PSRAM=opi, 16M flash)
+├── lv_conf.h                 # LVGL 8.3.11 config
+├── build_opt.h
+├── lib/bsp_cst816/           # vendored CST816 touch driver
+└── src/
+    ├── hardware_config.h     # pins, backlight (LEDC), battery ADC, power/haptics
+    ├── lvgl_port_v8.{h,cpp}  # LVGL port: PSRAM framebuffers, flush/touch cb, Core-1 task
+    ├── ble_notifications.{h,cpp}  # BLE server: notifications, task sync, time sync
+    ├── services/             # storage, task, focus, notification, connectivity(WiFi/HTTP), time, power
+    └── ui/
+        ├── theme, screen_manager, gesture
+        ├── widgets/status_bar
+        └── screens/          # watch_face, task_list, active_task, notification_view, priority_alert, control_panel
 ```
 
-## Installation Steps
+## How it runs
 
-1. **Clone or download this project** to your local machine
+- `setup()` brings up the ST7789 via Arduino_GFX, the CST816 touch over I²C,
+  then LVGL (`lvgl_port_init`), the service layer, the screen manager (starts
+  on the watch face), and BLE.
+- The **LVGL task** runs on Core 1; the **BLE task** runs on Core 0.
+- Phone notifications, task sync, and time sync arrive over **BLE**
+  (`ble_notifications.cpp`). WiFi is brought up on demand from the control panel
+  for the priority-alert HTTP server and the network-device ("Compressor")
+  control.
 
-2. **Open SmartWatchV3.ino** in Arduino IDE
+## Status / known gaps
 
-3. **Connect ESP32-S3-Touch-LCD-2** to your computer via USB-C
-
-4. **Select the correct COM port** in Tools → Port
-
-5. **Click Upload** to compile and flash the firmware
-
-## First Run
-
-After successful upload:
-
-1. **The display will show** the esp-brookesia boot screen
-2. **Watch face appears** with current time (needs RTC setup)
-3. **Swipe gestures**:
-   - Swipe up: App launcher
-   - Swipe down: Notifications
-   - Swipe left/right: Navigate between apps
-
-## Bluetooth Pairing
-
-### For Android:
-1. Install a companion app that supports notification forwarding
-2. Enable notification access in Android settings
-3. Pair with "ESP32-Watch" in Bluetooth settings
-4. Configure which apps can send notifications
-
-### For iOS:
-1. Pair with "ESP32-Watch" in Bluetooth settings
-2. Allow notification access when prompted
-3. iOS automatically sends notifications via ANCS
-
-## Customization
-
-### Adding New Apps
-
-Create a new class inheriting from `ESP_Brookesia_PhoneApp`:
-
-```cpp
-class MyCustomApp : public ESP_Brookesia_PhoneApp {
-public:
-    MyCustomApp() : ESP_Brookesia_PhoneApp("MyApp", nullptr, false) {}
-    
-    void onResume() override {
-        // Create your UI here
-    }
-    
-    void onPause() override {
-        // Cleanup when app goes to background
-    }
-};
-```
-
-Then install it in `installWatchApps()`:
-```cpp
-phone->installApp(new MyCustomApp());
-```
-
-### Changing Watch Face
-
-Modify the `WatchFaceApp` class in `watch_apps.h` to customize:
-- Time format (12/24 hour)
-- Date format
-- Additional widgets
-- Background images
-
-## Power Optimization Tips
-
-1. **Reduce display brightness** when not actively viewing
-2. **Use light sleep mode** between interactions
-3. **Limit BLE advertising** frequency
-4. **Disable unused features** (WiFi, etc.)
-5. **Optimize refresh rates** for static content
-
-## Memory Usage
-
-With default configuration:
-- **SRAM**: ~100KB used of 512KB
-- **PSRAM**: ~500KB used of 8MB
-- **Flash**: ~1.5MB used of 16MB
-
-## Troubleshooting
-
-### Display Issues
-- Check pin connections in `hardware_config.h`
-- Verify PSRAM is enabled in board settings
-- Ensure sufficient power supply
-
-### Touch Not Working
-- Verify I2C connections (SDA/SCL)
-- Check touch controller address (0x15)
-- Test with simple touch example first
-
-### BLE Connection Failed
-- Ensure BLE is not disabled in settings
-- Clear paired devices and retry
-- Check if another device is connected
-
-### Memory Errors
-- Enable PSRAM in board configuration
-- Reduce buffer sizes if needed
-- Monitor memory usage in serial output
-
-## Development Tips
-
-1. **Use Serial Monitor** (115200 baud) for debugging
-2. **Monitor memory usage** with the built-in reporting
-3. **Test features incrementally** - don't enable everything at once
-4. **Use FreeRTOS tasks** for parallel processing
-5. **Keep UI updates in the main LVGL task**
-
-## Resources
-
-- [esp-brookesia Documentation](https://github.com/espressif/esp-brookesia)
-- [LVGL Documentation](https://docs.lvgl.io/)
-- [ESP32-S3 Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf)
-- [Arduino ESP32 Core](https://github.com/espressif/arduino-esp32)
-
-## Known Limitations
-
-- BLE and WiFi cannot be used simultaneously (ESP32 limitation)
-- Maximum 10 concurrent apps due to memory constraints
-- Touch gestures limited to basic swipes and taps
-- No built-in GPS support (external module required)
-
-## Future Enhancements
-
-- [ ] Weather app with API integration
-- [ ] Music control for phone
-- [ ] Calendar sync
-- [ ] Voice assistant integration
-- [ ] Custom watch faces
-- [ ] Sleep tracking
-- [ ] Heart rate monitoring (requires external sensor)
+- IMU step-counting and wrist-raise are **stubs** in `hardware_config.h`
+  (`updateStepCount`, `checkWristRaise`) — the QMI8658 driver isn't wired in
+  yet. See `examples/04_qmi8658_output` / `05_lvgl_qmi8658`.
+- The priority-alert HTTP server only starts after WiFi is enabled in the
+  control panel.
+- `docs/BUILD_GUIDE.md` still documents the old esp-brookesia flow and is being
+  reworked; trust this README and `sketch.yaml` for building.
 
 ## License
 
-This project is provided as-is for educational purposes. Feel free to modify and use for personal projects.
-
-## Contributing
-
-Contributions are welcome! Please submit pull requests or issues on GitHub.
-
-## Support
-
-For questions and support:
-- Check the troubleshooting section
-- Review closed issues on GitHub
-- Post in ESP32 community forums
-- Contact the developer
-
----
-
-**Version**: 3.0  
-**Last Updated**: January 2025  
-**Author**: SmartWatch Development Team
+Provided as-is for personal/educational use.
