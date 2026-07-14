@@ -33,16 +33,20 @@ places the code diverged from the OEM reference, plus the fixes applied.
 
 ## Verified build
 
-The firmware now **compiles clean** against the OEM toolchain
-(arduino-cli, esp32 core 3.3.10, Arduino_GFX 1.6.6, lvgl 8.3.11) using the
+The firmware **compiles clean** against the exact stack Waveshare ships in its
+demo package — **esp32 core 3.1.3, Arduino_GFX 1.5.0, lvgl 8.4.0** — via the
 pinned profile in `SmartWatchV3/sketch.yaml`:
 
 ```
-Sketch uses 1755726 bytes (55%) of program storage space. Maximum is 3145728.
-Global variables use 167712 bytes (51%) of dynamic memory, leaving 159968 bytes.
+Sketch uses 2128792 bytes (67%) of program storage space. Maximum is 3145728.
+Global variables use 186684 bytes (56%) of dynamic memory, leaving 140996 bytes.
 ```
 
-That ~160 KB free is the whole story (see finding 1).
+**Version pinning matters at every layer.** Using the *latest* of anything
+breaks the set: Arduino_GFX ≥1.6 removes the `BLACK`/`RED`/… color macros the
+OEM code uses, and esp32 core ≥3.2.0 changed a SPI API that Arduino_GFX 1.5.0
+depends on. The versions above are read from Waveshare's demo `library.properties`
+files; the core (3.1.x) is the line that demo era validates against.
 
 ## Findings & fixes applied
 

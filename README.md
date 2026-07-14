@@ -1,7 +1,7 @@
 # ESP32-S3 ADHD-Friendly SmartWatch (v3)
 
 Firmware for the **Waveshare ESP32-S3-Touch-LCD-2**. Built directly on
-**Arduino + Arduino_GFX + LVGL 8.3.11**, following the manufacturer's own
+**Arduino + Arduino_GFX + LVGL**, following the manufacturer's own
 reference examples (`examples/01_factory`, `06_lvgl_battery`,
 `07_lvgl_brightness`, `04_qmi8658_output`). There is **no** esp-brookesia /
 ESP32_Display_Panel layer — that was removed (see
@@ -40,9 +40,14 @@ Pin/peripheral definitions live in `SmartWatchV3/src/hardware_config.h`.
 
 ## Software requirements
 
-- ESP32 Arduino core **3.x** (`esp32:esp32`)
-- Libraries: **lvgl 8.3.11**, **GFX Library for Arduino** (Arduino_GFX),
-  **ArduinoJson 7.x**. BLE / WiFi / HTTPClient / WebServer ship with the core.
+These versions are what Waveshare ships in its ESP32-S3-Touch-LCD-2 demo
+package and validates against — **do not bump blindly** (newer Arduino_GFX
+removes the color aliases the OEM code uses; core ≥3.2.0 breaks Arduino_GFX
+1.5.0):
+
+- ESP32 Arduino core **3.1.3** (`esp32:esp32`)
+- **GFX Library for Arduino 1.5.0**, **lvgl 8.4.0**, **ArduinoJson 7.x**.
+  BLE / WiFi / HTTPClient / WebServer ship with the core.
 - `bsp_cst816` (the CST816 touch driver) is **vendored** in
   `SmartWatchV3/lib/bsp_cst816/` — no separate install.
 
@@ -65,8 +70,8 @@ First time only, install the toolchain the profile references:
 ```bash
 arduino-cli core update-index \
   --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-arduino-cli core install esp32:esp32
-arduino-cli lib install "GFX Library for Arduino" "lvgl@8.3.11" ArduinoJson
+arduino-cli core install esp32:esp32@3.1.3
+arduino-cli lib install "GFX Library for Arduino@1.5.0" "lvgl@8.4.0" "ArduinoJson@7.4.3"
 ```
 
 ### Option B — Arduino IDE
@@ -93,7 +98,7 @@ The LVGL config (`SmartWatchV3/lv_conf.h`) is committed with the sketch — do
 SmartWatchV3/
 ├── SmartWatchV3.ino          # display/touch/LVGL bring-up, BLE task, service + screen init
 ├── sketch.yaml               # pinned arduino-cli build profile (PSRAM=opi, 16M flash)
-├── lv_conf.h                 # LVGL 8.3.11 config
+├── lv_conf.h                 # LVGL config (LV_COLOR_16_SWAP=1, matches factory)
 ├── build_opt.h
 ├── lib/bsp_cst816/           # vendored CST816 touch driver
 └── src/

@@ -4,10 +4,10 @@
  * Hardware: Waveshare ESP32-S3-Touch-LCD-2
  * Display:  320x240 landscape (ST7789 via SPI)
  * Touch:    CST816S (I2C)
- * UI:       LVGL 8.3.11 (direct, no framework)
+ * UI:       LVGL 8.4.0 (direct, no framework)
  *
  * Required Libraries (install via Arduino Library Manager):
- * - lvgl (v8.3.11)
+ * - lvgl (v8.4.0)
  * - ESP32 BLE Arduino
  * - ArduinoJson (v7.x)
  *
@@ -81,11 +81,14 @@
 #include "src/ui/screens/control_panel.h"
 
 // --- Display Objects ---
+// Constructed exactly as the factory firmware does — examples/01_factory/
+// bsp_lv_port.cpp:22-29 : FSPI + shared bus, ST7789 IPS with native 240x320.
 Arduino_DataBus *bus = new Arduino_ESP32SPI(
-    PIN_LCD_DC, PIN_LCD_CS, PIN_LCD_SCLK, PIN_LCD_MOSI, PIN_LCD_MISO);
+    PIN_LCD_DC, PIN_LCD_CS, PIN_LCD_SCLK, PIN_LCD_MOSI, PIN_LCD_MISO,
+    FSPI /* spi_num */, true /* is_shared */);
 
 Arduino_GFX *gfx = new Arduino_ST7789(
-    bus, PIN_LCD_RST, LCD_ROTATION, true /* IPS */);
+    bus, PIN_LCD_RST, LCD_ROTATION, true /* IPS */, LCD_H_RES, LCD_V_RES);
 
 // --- FreeRTOS Handles ---
 TaskHandle_t bleTaskHandle = NULL;
@@ -113,7 +116,7 @@ void setup() {
         Serial.println("ERROR: gfx->begin() failed!");
         while (1) delay(100);
     }
-    gfx->fillScreen(RGB565_BLACK);  // Arduino_GFX >=1.5 renamed BLACK -> RGB565_BLACK
+    gfx->fillScreen(BLACK);
 
     // Backlight at 80%
     ledcAttach(PIN_LCD_BL, BL_FREQ, BL_RESOLUTION);

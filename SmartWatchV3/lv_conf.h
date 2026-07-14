@@ -30,7 +30,7 @@
  *NOTE: The manufacturer's working examples use SWAP=0 with draw16bitRGBBitmap().
  *The flush callback handles both cases via the #if check, so either setting works —
  *but we match the examples by defaulting to 0.*/
-#define LV_COLOR_16_SWAP 0
+#define LV_COLOR_16_SWAP 1
 
 /*Enable features to draw on transparent background.
  *It's required if opa, and transform_* style properties are used.
