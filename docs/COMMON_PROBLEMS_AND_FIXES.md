@@ -16,8 +16,8 @@ Several factors contributed to these performance issues:
 ### Solution Implemented
 *   **Improved BLE Notification Parsing:** Replaced manual JSON parsing in `src/ble_notifications.h` with the `ArduinoJson` library. This significantly improved parsing efficiency and reliability.
 *   **Non-Blocking BLE Reconnection:** Modified the `attemptBLEReconnection()` function in `src/ble_notifications.h` to use a non-blocking timer, reducing the retry interval from 30 seconds to 10 seconds. This ensures the BLE task remains responsive.
-*   **Optimized UI Update Frequency:** Reduced the update frequency of the clock and watch face timers in `SmartWatchV3.ino` and `src/watch_apps.h` from every second to every 60 seconds. This drastically cut down on unnecessary UI redraws.
-*   **Dedicated Notification Display App:** Created a new `NotificationApp` (`src/notification_app.h`) to consume and display notifications from the `notificationQueue`, ensuring notifications are processed and shown efficiently.
+*   **Optimized UI Update Frequency:** Reduced the update frequency of the clock and watch face timers in `SmartWatchV3.ino` and `src/ui/screens/watch_face.cpp` from every second to every 60 seconds. This drastically cut down on unnecessary UI redraws.
+*   **Dedicated Notification Display:** Notifications are consumed from the `notificationQueue` by `src/services/notification_service.cpp` and shown via `src/ui/screens/notification_view.cpp`, ensuring notifications are processed and shown efficiently.
 
 ## 2. Blank Screen and UI Not Starting (`No touch device is initialized` Error)
 
@@ -77,16 +77,26 @@ Compilation failed with `invalid conversion from 'int' to 'ledc_timer_bit_t'` re
 
 To ensure a clean build and upload, use the following `arduino-cli` commands:
 
+The FQBN **must** include `PSRAM=opi` and `FlashSize=16M`. Without `PSRAM=opi`
+the LVGL framebuffers (allocated in PSRAM) fail to allocate and the screen stays
+blank. These options are pinned in `SmartWatchV3/sketch.yaml`, so the simplest
+correct commands use that profile:
+
 1.  **Compile Command:**
     ```bash
-    arduino-cli compile --fqbn esp32:esp32:esp32s3:PartitionScheme=huge_app "C:\Users\maxco\OneDrive\Documents\GitHub\IOT Projects\SmartWatchV3\SmartWatch_Project\SmartWatchV3"
+    arduino-cli compile --profile esp32s3 SmartWatchV3
     ```
 
 2.  **Upload Command (with full flash erase):**
     ```bash
-    arduino-cli upload -p COM3 --fqbn esp32:esp32:esp32s3:PartitionScheme=huge_app --upload-property esptool.erase_all=true "C:\Users\maxco\OneDrive\Documents\GitHub\IOT Projects\SmartWatchV3\SmartWatch_Project\SmartWatchV3"
+    arduino-cli upload --profile esp32s3 -p COM3 --upload-property esptool.erase_all=true SmartWatchV3
     ```
     *(Replace `COM3` with your actual port.)*
+
+If you build without the profile, the FQBN must be spelled out in full:
+```
+esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,FlashMode=qio,PartitionScheme=huge_app,CDCOnBoot=cdc,USBMode=hwcdc,CPUFreq=240,UploadSpeed=921600
+```
 
 ## Key Takeaways for Future Development
 

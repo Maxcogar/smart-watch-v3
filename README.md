@@ -130,8 +130,8 @@ SmartWatchV3/
   yet. See `examples/04_qmi8658_output` / `05_lvgl_qmi8658`.
 - The priority-alert HTTP server only starts after WiFi is enabled in the
   control panel.
-- `docs/BUILD_GUIDE.md` still documents the old esp-brookesia flow and is being
-  reworked; trust this README and `sketch.yaml` for building.
+- For a step-by-step walkthrough see `docs/BUILD_GUIDE.md`; `sketch.yaml` is the
+  source of truth for board options and library versions.
 
 ## License
 

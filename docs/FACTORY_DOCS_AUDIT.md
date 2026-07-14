@@ -87,10 +87,11 @@ The constant was `HSPI` (and unused). **Fix:** set to `FSPI` to match the OEM.
 OEM `06_lvgl_battery` formula is `3.3/4096*adc*3`; the code used `4095.0f`.
 **Fix:** changed to `4096.0f` to match the OEM formula exactly.
 
-## Note on the README (not yet changed)
-`README.md` still instructs builders to install **esp-brookesia /
-ESP32_Display_Panel / ESP32_IO_Expander** and describes a brookesia
-app-launcher UI. The firmware was deliberately moved off those libraries to the
-OEM `Arduino_GFX` + `bsp_cst816` path (see
-`COMMON_PROBLEMS_AND_FIXES.md` §2). The README should be rewritten to match the
-shipped code and the OEM method. Flagged for a follow-up.
+## Project docs corrected
+`README.md`, `docs/BUILD_GUIDE.md`, `docs/PRD.md`, and
+`docs/COMMON_PROBLEMS_AND_FIXES.md` previously described the abandoned
+esp-brookesia / ESP32_Display_Panel flow, wrong pins, a "2.8-inch" display,
+ESP-IDF toolchain, no PSRAM, and a build command missing `PSRAM=opi`. Those
+factual errors were corrected in place to match the shipped code and the OEM
+method — the documents and their intent were preserved, only the wrong facts
+were fixed.

@@ -165,8 +165,8 @@ These five principles are grounded in clinical ADHD research and neurodivergent 
 | Constraint | Detail |
 |------------|--------|
 | Processor  | ESP32-S3 dual-core Xtensa LX7 @ 240MHz |
-| Memory     | 512KB SRAM, 384KB ROM — strict optimization required |
-| Display    | 2.8" TFT LCD, 320×240, fixed horizontal orientation |
+| Memory     | 512KB SRAM, 384KB ROM, 8MB OPI PSRAM, 16MB Flash — large buffers (framebuffers, JSON) go in PSRAM |
+| Display    | 2.0" IPS LCD, ST7789T3, native 240×320 (operated landscape 320×240 at rotation 1) |
 | Touch      | Single-point capacitive — no multi-touch |
 | Battery    | ~12 hours with aggressive power management |
 
@@ -232,7 +232,7 @@ These five principles are grounded in clinical ADHD research and neurodivergent 
 
 ### Epic 1 — Foundation, Core UI & Priority Systems (26 SP)
 
-**Dependencies:** ESP-IDF setup, hardware procurement, dev environment configuration
+**Dependencies:** Arduino/arduino-cli setup, hardware procurement, dev environment configuration
 **Risk Factors:** Hardware delivery delays, toolchain compatibility issues
 **Success Criteria:** Stable platform foundation with < 250ms UI response time
 
@@ -242,7 +242,7 @@ These five principles are grounded in clinical ADHD research and neurodivergent 
 
 | AC    | Criteria |
 |-------|----------|
-| 1.1.1 | **Build System** — Project compiles without errors using ESP-IDF v5.1+ toolchain within 60 seconds on dev machine. |
+| 1.1.1 | **Build System** — Project compiles without errors using the Arduino ESP32 core (arduino-cli) within 60 seconds on dev machine. |
 | 1.1.2 | **Boot Sequence** — Device completes power-on boot within 5 seconds and displays splash screen. |
 | 1.1.3 | **Display Init** — 320×240 LCD initializes with correct orientation and 80% brightness. |
 | 1.1.4 | **Touch Calibration** — Touch responds with visual feedback within 250ms across entire surface. |

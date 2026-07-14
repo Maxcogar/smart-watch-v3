@@ -81,7 +81,7 @@ Transistor Emitter → GND
 ```
 Li-Po Battery (+) → Battery connector (+)
 Li-Po Battery (-) → Battery connector (-)
-Add 10kΩ + 10kΩ voltage divider to GPIO9 for monitoring
+Battery monitoring is already onboard via a divider on GPIO5 (no wiring needed)
 ```
 
 ## Software Installation
@@ -109,107 +109,68 @@ Add 10kΩ + 10kΩ voltage divider to GPIO9 for monitoring
 
 ### Step 3: Install Required Libraries
 
-Open **Tools → Manage Libraries** and install:
+Open **Tools → Manage Libraries** and install these exact versions (they match
+Waveshare's demo package — newer versions break the build):
 
-1. **esp-brookesia**
-   - Search: "esp-brookesia"
-   - Install version 0.4.2 or later
-   - This provides the UI framework
+1. **GFX Library for Arduino** (Arduino_GFX)
+   - Search: "GFX Library for Arduino"
+   - Install version **1.5.0** (≥1.6 removes the `BLACK`/`RED`/… color macros)
+   - Drives the ST7789 display
 
-2. **ESP32_Display_Panel**
-   - Search: "ESP32_Display_Panel"
-   - Install latest version
-   - Hardware abstraction layer
-
-3. **ESP32_IO_Expander**
-   - Search: "ESP32_IO_Expander"
-   - Install latest version
-   - Required by Display Panel
-
-4. **lvgl**
+2. **lvgl**
    - Search: "lvgl"
-   - Install version 8.3.11
+   - Install version **8.4.0**
    - Graphics library
 
-5. **ArduinoJson**
+3. **ArduinoJson**
    - Search: "ArduinoJson"
    - Install latest 7.x version
    - For parsing notifications
 
+The **CST816 touch driver (`bsp_cst816`)** is vendored in the sketch itself
+(`SmartWatchV3/bsp_cst816.h/.cpp`) — nothing to install.
+
+> Note on the ESP32 board package: install **version 3.1.3**. Arduino_GFX 1.5.0
+> does not compile against core ≥3.2.0 (a SPI API changed).
+
 ### Step 4: Configure LVGL
 
-1. Navigate to Arduino libraries folder:
-   - Windows: `Documents\Arduino\libraries\lvgl`
-   - Mac: `~/Documents/Arduino/libraries/lvgl`
-   - Linux: `~/Arduino/libraries/lvgl`
+**No manual LVGL configuration is needed.** The project ships its own
+`lv_conf.h` inside the sketch folder (`SmartWatchV3/lv_conf.h`), and
+`SmartWatchV3.ino` defines `LV_CONF_INCLUDE_SIMPLE` so LVGL uses it. Do **not**
+copy `lv_conf_template.h` into your Arduino `libraries` folder — that would
+shadow the project's config.
 
-2. Copy `lv_conf_template.h` to `lv_conf.h` in the Arduino libraries folder (one level up from lvgl)
+Key settings already baked into `SmartWatchV3/lv_conf.h`:
 
-3. Edit `lv_conf.h`:
-   ```c
-   #if 1  // Change 0 to 1 to enable content
-   
-   // Enable snapshot for esp-brookesia
-   #define LV_USE_SNAPSHOT 1
-   
-   // Memory settings
-   #define LV_MEM_SIZE (48U * 1024U)  // 48KB
-   #define LV_MEM_ADR 0  // Use malloc
-   
-   // Display settings
-   #define LV_HOR_RES_MAX 240
-   #define LV_VER_RES_MAX 320
-   
-   // Color depth
-   #define LV_COLOR_DEPTH 16
-   
-   // Enable widgets needed
-   #define LV_USE_BTN 1
-   #define LV_USE_LABEL 1
-   #define LV_USE_IMG 1
-   #define LV_USE_LIST 1
-   #define LV_USE_SLIDER 1
-   #define LV_USE_SWITCH 1
-   ```
+```c
+#define LV_COLOR_DEPTH   16
+#define LV_COLOR_16_SWAP 1     // matches the factory firmware for this panel
+#define LV_MEM_CUSTOM    0
+#define LV_MEM_SIZE      (96U * 1024U)
+```
 
 ## Library Configuration
 
-### Configure ESP32_Display_Panel
+### Display and touch
 
-1. Locate library folder
-2. Copy `ESP_Panel_Board_Custom.h` template
-3. Configure for your board:
-   ```c
-   // Example for 240x320 ST7789 display
-   #define ESP_PANEL_LCD_WIDTH  240
-   #define ESP_PANEL_LCD_HEIGHT 320
-   
-   #define ESP_PANEL_LCD_BUS_TYPE ESP_PANEL_BUS_TYPE_SPI
-   #define ESP_PANEL_LCD_SPI_CLK_HZ (40 * 1000 * 1000)
-   
-   // Pin configuration
-   #define ESP_PANEL_LCD_SPI_CS 37
-   #define ESP_PANEL_LCD_SPI_SCK 36
-   #define ESP_PANEL_LCD_SPI_MOSI 35
-   #define ESP_PANEL_LCD_DC 38
-   #define ESP_PANEL_LCD_RST 39
-   ```
+This project drives the display directly with **Arduino_GFX** and the touch
+controller with the vendored **`bsp_cst816`** driver — there is no
+`ESP32_Display_Panel` / `esp-brookesia` configuration to edit. The display
+object is constructed in `SmartWatchV3.ino`, exactly as the factory example
+(`examples/01_factory/bsp_lv_port.cpp`) does:
 
-### Configure esp-brookesia
-
-Edit `esp_brookesia_conf.h` in project:
-```c
-// Enable phone UI
-#define ESP_BROOKESIA_PHONE_ENABLE 1
-
-// Memory allocation
-#define ESP_BROOKESIA_MEMORY_INCLUDE_PSRAM 1
-
-// UI Elements
-#define ESP_BROOKESIA_STATUS_BAR_ENABLE 1
-#define ESP_BROOKESIA_NAVIGATION_BAR_ENABLE 1
-#define ESP_BROOKESIA_APP_LAUNCHER_ENABLE 1
+```cpp
+// FSPI + shared bus, ST7789 IPS, native 240x320
+Arduino_DataBus *bus = new Arduino_ESP32SPI(
+    PIN_LCD_DC /*42*/, PIN_LCD_CS /*45*/, PIN_LCD_SCLK /*39*/,
+    PIN_LCD_MOSI /*38*/, PIN_LCD_MISO /*40*/, FSPI, true);
+Arduino_GFX *gfx = new Arduino_ST7789(
+    bus, PIN_LCD_RST /*-1*/, LCD_ROTATION /*1*/, true /*IPS*/, 240, 320);
 ```
+
+Pin values live in `SmartWatchV3/src/hardware_config.h`; do not change them
+unless the hardware changes.
 
 ## Code Compilation
 
@@ -270,16 +231,18 @@ Edit `esp_brookesia_conf.h` in project:
 
 1. Open **Tools → Serial Monitor**
 2. Set baud rate to **115200**
-3. You should see:
+3. You should see (actual boot output from `SmartWatchV3.ino`):
    ```
-   ESP32-S3 SmartWatch v3.0 Starting...
-   Initializing hardware...
-   Initialize panel device
-   Initialize LVGL
-   Create and configure phone UI
-   Installing smartwatch apps...
-   SmartWatch initialization complete!
+   ESP32-S3 SmartWatch Starting...
+   LVGL: 2x full-screen buffers in PSRAM (76800 px each)
+   LVGL port initialization complete
+   LVGL task started
+   Initializing BLE...
+   SmartWatch init complete!
+   === Memory Status ===
    ```
+   The `2x full-screen buffers in PSRAM` line confirms PSRAM is enabled. If you
+   instead see a PSRAM allocation error, your build is missing `PSRAM=opi`.
 
 ### Basic Functionality Tests
 
@@ -462,39 +425,31 @@ lv_obj_invalidate(changed_object);  // Instead of full refresh
 
 ## Advanced Configuration
 
-### Custom App Development
+### Custom Screen Development
 
-Template for new app:
+Screens are plain LVGL, registered with the project's `ScreenManager` (see
+`src/ui/screen_manager.h` and the existing screens in `src/ui/screens/`). A
+screen provides `create`/`destroy` functions and is registered in
+`SmartWatchV3.ino`. Template following the existing pattern:
+
 ```cpp
-class CustomApp : public ESP_Brookesia_PhoneApp {
-private:
-    lv_obj_t* main_container;
-    
-public:
-    CustomApp() : ESP_Brookesia_PhoneApp("CustomApp", app_icon, false) {
-        // Constructor
+// src/ui/screens/my_screen.h / .cpp
+namespace MyScreen {
+    lv_obj_t *create(lv_obj_t *parent) {
+        lv_obj_t *root = lv_obj_create(parent);
+        lv_obj_set_size(root, lv_pct(100), lv_pct(100));
+        // ... build your UI on `root` ...
+        return root;
     }
-    
-    void onResume() override {
-        // Create UI when app opens
-        main_container = lv_obj_create(lv_scr_act());
-        lv_obj_set_size(main_container, LV_PCT(100), LV_PCT(100));
-        
-        // Add your UI elements here
+    void destroy(lv_obj_t *root) {
+        if (root) lv_obj_del(root);
     }
-    
-    void onPause() override {
-        // Clean up when app closes
-        if (main_container) {
-            lv_obj_del(main_container);
-            main_container = nullptr;
-        }
-    }
-    
-    void onDestroy() override {
-        onPause();
-    }
-};
+}
+```
+
+Then register it in `setup()` alongside the others:
+```cpp
+ScreenManager::registerScreen(SCREEN_MY_SCREEN, MyScreen::create, MyScreen::destroy, "My Screen");
 ```
 
 ### Adding External Sensors
@@ -536,7 +491,7 @@ Expected performance with optimizations:
 
 ## Next Steps
 
-1. **Customize UI**: Modify `watch_apps.h` for your design
+1. **Customize UI**: Modify the screens in `src/ui/screens/` for your design
 2. **Add Features**: Implement additional sensors
 3. **Create Companion App**: Build phone app for enhanced features
 4. **Design Case**: 3D print or purchase watch case
